@@ -29,6 +29,7 @@
   },
   "scripts": {
     "check:dsh": "node scripts/check-dsh-version.mjs",
+    "check:upgrade": "node scripts/check-upgrade.mjs",
     "build": "node scripts/build-client.mjs",
     "test": "vitest run tests/unit",
     "test:probe": "vitest run tests/probe",

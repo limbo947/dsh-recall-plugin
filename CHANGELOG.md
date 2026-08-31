@@ -2,6 +2,16 @@
 
 本文件格式遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循语义化版本。
 
+## [Unreleased]
+
+开发工具链与兼容性台账增强（无运行时行为变更，不发版）。
+
+### 变更
+
+- **dsh 升级一键核验门禁 `npm run check:upgrade`**：串联 check:dsh + test:probe + verify:host 三层机器化核验，输出后提示在 compat-audit.md 头部追加核验记录——dsh 升级后一条命令替代手动三步。
+- **compat 台账复查方式增强**：I1/I3/I4/I5/I7/I9/I12/I18/I20 复查动作补官方产物证据链（读哪个包哪个文件、断言什么），修正 I1 与 I29 的 priority 语义脱节（guard 强制分配 shadowing priority）、I5 补「context 键已评估无害」结论；I9/I15/I19/I22/I23 出处标注「非官方耦合」（项目内约定，dsh 升级复查不涉及）。
+- **字段探针补盲 + 负向断言**：fork 探针改双包探测（原指向已删除的 dsh-client-runtime，alpha.3 下静默零断言）+ atSeq/increaseTitle 严格可选负向断言；settings RPC 探针迁至 dsh-api-settings-controller（原 dsh-host-apiproxy 已删除）；新增 I1/I3/I4/I7/I8/I9/I12/I18/I20 断言与 ConversationNode 节点集合断言——官方新增投影 kind / 收紧可选参数 / 删除字段即红。探针 29 例全绿。
+
 ## [2.3.0] - 2026-08-31
 
 修复批次：适配 dsh 0.1.2 / 0.1.2-alpha.2（兼容 0.1.1-rc.2）。单测 285 例全绿，`verify:host` 装配门禁、`check:dsh` 巡检、`test:probe` 探针全绿；新旧两版 DSH（0.1.1-rc.2 / 0.1.2-alpha.2，Windows）实弹验证通过——撤回按钮、设置页「撤回插件」卡片、快照删除均正常。

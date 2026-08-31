@@ -5,7 +5,7 @@
 > 核对「出处」是否漂移，替代全文重读 AGENTS.md。AGENTS.md「已知坑」保留为一行一条
 > 索引，细节住这里，避免双写漂移。
 >
-> 出处标注为 2026-08-30 核验；每次 dsh 升级后按「复查动作」更新本节「核验日期」。
+> 出处标注为 2026-09-01 核验（alpha.3）；每次 dsh 升级后按「复查动作」更新本节「核验日期」。
 >
 > **0.1.2-alpha.2 核验（2026-08-31）**：新增 I30（settings 辅助函数移除）；
 > I1/I2/I4/I5 的 chat.node 出处均为 ui-chat 包（探针已改双包探测）；事件信封
@@ -24,17 +24,46 @@
 > 3. 其余（导航预览/渲染优化/权限文案/read_image/Tab 补全/断连误判/标题窄视口）均为
 >    UI 与工具层，与插件耦合点无关。
 > 结论：无需改码；升级后仍跑 `npm run check:dsh` + `npm run test:probe` 机器化钉住。
+>
+> **0.1.2-alpha.3 本地实装核验（2026-09-01）**：全局 dsh 已实装 alpha.3
+> （`npm install -g @deepseek-ai/dsh@alpha`），reference/ 镜像已重拉至
+> alpha.3 归档——官方 docs/ 目录重构后源路径迁移（如
+> `docs/develop/basic/*` → `docs/user/develop/basic/*`、
+> 11 号文件并入 `docs/subsystems/conversation.zh.md`），映射表已写入
+> reference/README.md「更新方式」。实机验证：
+> 1. `npm run test:probe` 17/17 绿——fork 签名（I6）、renderMessageImages（I2）、
+>    SessionHeader 负向断言（I28）、stdin 字节保真（I27）官方字段假设无漂移；
+> 2. `npm run verify:host` 装配门禁绿——inject 声明/12 端点/installSection
+>    兼容分支（I30 在 alpha.3 导出面未再变）；
+> 3. `npm test` 285/285 绿；`npm run check:dsh` 漂移一致安静退出。
+> 结论：I1–I30 逐条复查无新增漂移，无需改码（09-architecture.md 新镜像仍写
+> `fork(source, boundary?, childSessionId?)`，经 .d.ts 实机核验为文档示意写法而非
+> 另一签名——唯一契约是对象形态 `fork({sessionId, atSeq?, increaseTitle?})`，见 I6）。
+>
+> **复查方式增强（2026-09-01）**：针对「确认未变」类复查动作缺证据链的审查结论
+> （实证漏检：I5 的 context 键 0.1.2-alpha.1 已新增但探针零感知；I1 priority 语义与
+> I29 的 guard 强制覆盖事实脱节），完成三项增强：
+> 1. I1/I3/I4/I5/I7/I9/I12/I18/I20 的复查动作全部补官方产物证据链（读哪个包哪个
+>    文件、断言哪个字段/语义），I1 与 I29 对齐，I5 补「context 已评估无害」结论；
+> 2. 新增负向探针：I5 的 ConversationNode kind 全集断言（官方新增 kind 即红，逼人
+>    评估是否需覆盖）、I6 的 atSeq/increaseTitle 严格可选断言（变必填即红）；
+> 3. 新增 `npm run check:upgrade` 一键门禁：串联 check:dsh + test:probe +
+>    verify:host，dsh 升级后一条命令全跑，并提示在本文头部追加核验记录。
 
 ## 矩阵
 
 ### I1 conversation.chat.node keyed slot：负值 priority + 冲突递减重试
 - **依赖的官方行为**：keyed slot（key=`user`）不指定 priority 会因与默认渲染器同 key
   冲突而拒载整个插件；负值 priority 覆盖默认实现。
-- **出处**：slot 注册契约（0.1.2-alpha.1 迁包：`dsh-client-ui-chat` 的 contract/slots.d.ts；0.1.1-rc.2 在 `dsh-client-ui-conversation`，声明内容逐字段一致）。
-- **探针/单测**：无直接探针（client 加载契约，见 I13）；冒烟「撤回按钮出现」覆盖。
+- **出处**：slot 注册契约（0.1.2-alpha.1 迁包：`dsh-client-ui-chat` 的 contract/slots.d.ts；0.1.1-rc.2 在 `dsh-client-ui-conversation`，声明内容逐字段一致）+ `dsh-cordis-client-runner/lib/types/client/guard.d.ts`（0.1.2 起 register 代理强制分配 shadowing priority，见 I29）。
+- **探针/单测**：`tests/probe/api-surface.test.js`（guard 的 allocatePriority/shadowing 断言）+ 冒烟「撤回按钮出现」覆盖。
 - **失效症状**：插件白屏/整体拒载，或撤回按钮不渲染。
-- **复查动作**：核对 keyed slot 冲突语义与 priority 覆盖规则未变；`['user','steering']`
-  两 key 仍是独立注册。
+- **复查动作**：读 `dsh-cordis-client-runner/lib/types/client/guard.d.ts` 确认 register
+  代理仍强制分配 shadowing priority（「later registrations sort first」）——0.1.2 起
+  插件传入的 priority 被覆盖（I29 实证），app.js 的负值递减重试循环因此失效但无害
+  （插件注册晚于官方默认渲染器，shadowing 排序后仍排前、等效覆盖默认实现）；若官方改回
+  尊重插件 priority 值，可恢复重试循环原始语义。`['user','steering']` 两 key 仍独立注册
+  （kind 集合由 I5 探针盯防）。
 
 ### I2 chat.node props：只有 renderMessageImages，无 loadImage
 - **依赖的官方行为**：`renderMessageImages({ images: [{attachment}], align })` 是图片
@@ -49,61 +78,83 @@
 - **依赖的官方行为**：`props = {...kit, ...injected, ...slotInjected.props, ...ownerProps}`，
   kit 注入 `sessionId/useSession/useSessions/useWorkspaces/useProjection`；owner 同名覆盖 kit。
 - **出处**：`dsh-client-ui-renderer` standardProps/renderEntry（构建产物）。
-- **探针/单测**：无直接探针；UserRecallNode 读取 `props.sessionId`/`props.renderMessageImages`。
+- **探针/单测**：`tests/probe/api-surface.test.js`（standardProps/renderEntry 存在性断言）+ UserRecallNode 读取 `props.sessionId`/`props.renderMessageImages`。
 - **失效症状**：撤回按钮按 `sessionId` 查询失效（按钮出现但快照查询错会话）。
-- **复查动作**：核对 standardProps 合成顺序未变；props.sessionId 仍为 kit 注入。
+- **复查动作**：读 `dsh-client-ui-renderer/lib/client.js` 的 `standardProps`（L549）与
+  `renderEntry`（L650）——确认合成顺序仍为 `{...kit, ...injected, ...slotInjected.props,
+  ...ownerProps}`：kit 最先展开（sessionId/useSession 等 kit 注入项仍在）、ownerProps
+  同名覆盖 kit 的语义未变。
 
 ### I4 消息节点 id：node.id 是快照主键，node.key 是位置键
 - **依赖的官方行为**：`node.id` 是真实消息 ID；`node.key` 是位置键（如 `13:input`）。
 - **出处**：`dsh-client-ui-chat` ChatNode 类型（0.1.2-alpha.1 迁入，`node.id`/`node.key` 语义不变）。
-- **探针/单测**：无直接探针；冒烟「撤回 → 文件恢复正确」覆盖。
+- **探针/单测**：`tests/probe/api-surface.test.js`（ConversationViewNode 同时声明 id/key）+ 冒烟「撤回 → 文件恢复正确」覆盖。
 - **失效症状**：快照查询永远 miss，撤回按钮永不出现或撤回错消息。
-- **复查动作**：确认 ChatNode.id 语义未变（仍为消息 ID）。
+- **复查动作**：读 `dsh-client-ui-conversation/lib/types/client/contract/conversation.d.ts`
+  L94-100 `ConversationViewNode`——`id`（消息 ID）与 `key`（位置键）两字段仍存在且分离；
+  `dsh-client-ui-chat` 的 ChatNode 仍继承该接口（chat-nodes.d.ts L3-8）。
 
 ### I5 chat.node keyed key 与 UI 投影 kind 对齐（user + steering）
 - **依赖的官方行为**：agent 运行中插入的转向指令投影为 `steering`（非 `user`），存储层
   `role` 恒 user；只注册 `key:'user'` 时 steering 节点落到官方默认渲染、撤回按钮缺失。
 - **出处**：`dsh-client-ui-chat` 投影 kind 定义（0.1.2-alpha.1 迁入；完整 ChatNodeKind 全集见 dsh-contract.md §1.1，含新增 `context` 键）。
-- **探针/单测**：无直接探针；冒烟「agent 运行中转向指令带撤回按钮」覆盖。
+- **探针/单测**：`tests/probe/api-surface.test.js`（ConversationNode kind 全集负向断言：
+  官方新增 kind 即红，逼人评估是否需覆盖）+ 冒烟「agent 运行中转向指令带撤回按钮」覆盖。
 - **失效症状**：转向指令消息无撤回按钮（静默缺失）。
-- **复查动作**：确认 UI 投影 kind 集合未新增需覆盖的键。
+- **复查动作**：跑 test:probe 的 kind 集合断言。现状 kind 全集 11 个（user/assistant/
+  steering/context/model-retry/turn-error/turn-max-tokens/tool-result/command/
+  compaction/unknown，`dsh-client-ui-conversation/lib/types/client/contract/records.d.ts`
+  L248 ConversationNode）——其中 `context`（官方 0.1.2-alpha.1 新增）已评估**无害**：
+  context 注入行不需要撤回按钮，落官方默认渲染即可，无需注册 key；其余 kind 同理
+  （assistant/tool 等是助手侧内容）。只有 user/steering 是「用户气泡」形态需覆盖。
 
 ### I6 sessions.fork：不传 increaseTitle（标题「xxx 2」回归钉）
 - **依赖的官方行为**：`fork({ sessionId, atSeq?, increaseTitle? }) → Promise<SessionId>`；
   `increaseTitle` 会把子会话标题改为「xxx 2」并递增。
 - **出处**：`dsh-api-session-controller/lib/types/client/contract/sessions.d.ts` L97
   （0.1.2-alpha.1 由 `dsh-client-runtime` 迁入该新包；fork 签名与 0.1.1-rc.2 逐字段一致）。
-- **探针/单测**：`tests/probe/api-surface.test.js`（fork 签名 + increaseTitle 可选）。
+- **探针/单测**：`tests/probe/api-surface.test.js`（fork 双包探测 + atSeq/increaseTitle 严格可选负向断言）。
 - **失效症状**：撤回后标题变「xxx 2」且多次撤回递增。
 - **复查动作**：确认 fork 签名未变、increaseTitle 仍可选；本项目仍不传它。另注：
-  reference/09-architecture.md 的 Host 侧文档写 `ctx.sessions.fork(source, boundary?,
-  childSessionId?)`（2026-08-30 镜像），与 client 侧对象参数契约为不同层签名；本项目
-  撤回走 client 侧 `fork({ sessionId, atSeq })`，勿按 Host 文档改 client 调用（探针钉
-  client 形态）。
+  reference/09-architecture.md「新行为归属位置」表写
+  `ctx.sessions.fork(source, boundary?, childSessionId?)`（2026-09-01 镜像）——
+  **是文档的示意写法，不是另一个签名**：alpha.3 实装
+  `dsh-api-session-controller/lib/types/client/contract/sessions.d.ts` L94-98 的
+  `ISessions.fork(opts: {sessionId, atSeq?, increaseTitle?})` 是唯一契约（JSDoc 明示
+  opts 即 source session id / anchoring cut 的 event seq / 标题递增开关），文档的
+  第三个参数 `childSessionId?` 在契约中不存在；Host 侧 `dsh-session` 只有
+  `CreateSessionOptions.seed`（种子回放），无 fork 方法。本项目撤回走
+  `fork({ sessionId, atSeq })` 对象形态（src/client/recall-node.js），与契约逐字
+  匹配，探针钉住。
 
 ### I7 archiveSession 语义：归档 = 从分组表面隐藏（F1 lineage 链断裂根因）
 - **依赖的官方行为**：`archiveSession(sessionId)` 把会话移入 registry-global set，
   **hidden from grouping surfaces**（日志与记账槽保留）。
 - **出处**：`dsh-api-workspace-controller/lib/types/client/contract/`（0.1.2-alpha.1 由
   `dsh-client-runtime` 迁入该新包）。
-- **探针/单测**：无直接探针；F1 用 Host 记录 fork lineage 绕过该限制。
+- **探针/单测**：`tests/probe/api-surface.test.js`（archiveSession Remote 方法存在 + workspaceRegistry 路由）；F1 用 Host 记录 fork lineage 绕过该限制。
 - **失效症状**：纯 client 侧从 sessions.list 读不到已归档中间版本的 parentId。
-- **复查动作**：确认 archiveSession 仍「隐藏但保留日志」；若改为可列举，F1 可简化。
+- **复查动作**：读 `dsh-api-workspace-controller/lib/index.js` L279-282——`archiveSession`
+  方法仍存在且路由到 `workspaceRegistry.archiveSession`（归档 = 从分组表面隐藏、日志与
+  记账槽保留）；若官方改为可列举或删除该方法，F1 的 lineage 链记录可相应简化。
 
 ### I8 sessionQuery.listSessions：会话 id 在 header.id
 - **依赖的官方行为**：listSessions 记录形如 `{header, live, persisted}`，会话 id 在
   `header.id`；顶层 `record.id` 恒 undefined。
 - **出处**：`dsh-session-query/lib/types/corpus.d.ts`（`header: SessionHeader`）。
-- **探针/单测**：`tests/probe/api-surface.test.js`（header: SessionHeader + listSessions）。
+- **探针/单测**：`tests/probe/api-surface.test.js`（header: SessionHeader + listSessions + SessionRecord 顶层无 id 负向断言）。
 - **失效症状**：预热重建的孤儿快照 sessionId 记空，树形管理落「已删除会话」。
 - **复查动作**：确认 SessionRecord.header 结构未变。
 
 ### I9 冷启动 sessions.list() 为空：exclude 枚举须叠加 home 容器磁盘兜底
 - **依赖的官方行为**：`ctx.sessions.list()` 是纯内存 Map，冷启动惰性载入常为空。
-- **出处**：ISessions 契约（纯内存）+ `resolveHomeContainer` 磁盘兜底（本项目 store.js）。
-- **探针/单测**：无直接探针；冒烟「冷启动设置页可见排除配置」覆盖。
+- **出处**：官方部分 = `dsh-session/lib/index.js`（SessionStore 纯内存 Map，L1480-1481）；项目部分 = `resolveHomeContainer` 磁盘兜底（lib/store.js，**非官方耦合**——dsh 升级复查不涉及，改 store 代码时复核）。
+- **探针/单测**：`tests/probe/api-surface.test.js`（SessionStore 服务名 + 内存 Map 形态断言）+ 冒烟「冷启动设置页可见排除配置」覆盖。
 - **失效症状**：设置页误报「尚未创建快照存储」，exclude 编辑不可见。
-- **复查动作**：确认 sessions.list 仍为惰性载入；resolveHomeContainer 兜底路径仍有效。
+- **复查动作**：读 `dsh-session/lib/index.js` L1480-1481 `SessionStore`——`store` 仍是
+  纯内存 Map（注释明示「Persistence is intentionally not implemented here」）、`list()`
+  （L1723）仍同步返回该 Map；冷启动为空、依赖持久化插件经 `session/event` 重放填充的
+  语义未变。`resolveHomeContainer` 磁盘兜底路径（本项目 lib/store.js）仍有效。
 
 ### I10 cordis inject 门禁：ctx.<service> 必须在 inject 声明
 - **依赖的官方行为**：cordis 4 要求服务在插件 `inject` 声明才可经 `ctx.xxx` 访问，漏声明
@@ -125,9 +176,12 @@
 - **依赖的官方行为**：`settings.plugin.item` 是 root 级 keyed slot，按 settings namespace
   作为 entryKey 分发；卡片 key 必须与 Host namespace（`dsh-recall`）一致。
 - **出处**：`dsh-client-ui-settings-plugins` configurable 标签页声明。
-- **探针/单测**：无直接探针；冒烟「设置页撤回卡片出现」覆盖。
+- **探针/单测**：`tests/probe/api-surface.test.js`（settings.plugin.item 仍为 keyed + root）+ 冒烟「设置页撤回卡片出现」覆盖。
 - **失效症状**：设置卡片永不渲染（key 不匹配，静默）。
-- **复查动作**：确认 namespace 分发语义未变；卡片 key 与 Host namespace 同步。
+- **复查动作**：读 `dsh-client-ui-settings-plugins/lib/types/client/slot-contract.d.ts`——
+  `settings.plugin.item` 仍是 `kind:'keyed'; scope:'root'`、按 settings namespace 作为
+  key 分发（「Keying on the namespace is what lets a plugin … the tab pairs the two」）；
+  卡片 key 与 Host namespace（`dsh-recall`）一致的分发约定未变。
 
 ### I13 ModuleLoader：单文件 CJS factory 包裹（R1 路线 B 依据）
 - **依赖的官方行为**：插件 bundle 由 `serveBundle` 原文 serve 为 `text/javascript`，浏览器
@@ -153,7 +207,7 @@
 ### I15 runShell 失败兜底：g='<store.git>' 赋值约定 + RECALL_CLEANUP 哨兵
 - **依赖的官方行为**：runShell 失败路径从脚本文本提取 `g='<store.git>'` 清孤儿进程与
   stale 锁；清扫脚本带 `RECALL_CLEANUP` 哨兵防递归。
-- **出处**：`lib/store.js` extractGitDir / cleanupAfterGitFailure。
+- **出处**：`lib/store.js` extractGitDir / cleanupAfterGitFailure（**非官方耦合**：项目内约定，dsh 升级复查不涉及；改 runShell 失败兜底时复核）。
 - **探针/单测**：`tests/unit/scripts-contract.test.js`（STORE_SCRIPTS 的 g= 约定 + 哨兵）。
 - **失效症状**：孤儿 git 持锁 30+ 分钟；清扫脚本自递归。
 - **复查动作**：新增带 store 脚本模板必须维持 g= 赋值；scripts-contract 变红即修。
@@ -175,15 +229,18 @@
 ### I18 子进程不继承 DSH_HOME：POSIX home 探测三档回退
 - **依赖的官方行为**：DSH bash 执行器洗刷子进程 DSH_* 变量，用户导出的 DSH_HOME 在
   bash 里通常不可见。
-- **出处**：`lib/store.js` posixHomeBaseResolve（bash env → Node 主进程 env → os.homedir()）。
-- **探针/单测**：无直接探针；冒烟「POSIX 下快照存对 home」覆盖。
+- **出处**：官方部分 = `dsh-shell-env/lib/index.js`（DSH_ENV_PREFIX 注册表 + RESERVED_BASH_ENV_KEYS 含 DSH_HOME_ENV）；项目部分 = `lib/store.js` posixHomeBaseResolve（**非官方耦合**，改 store 代码时复核）。
+- **探针/单测**：`tests/probe/api-surface.test.js`（DSH_ENV_PREFIX / RESERVED_BASH_ENV_KEYS / DSH_HOME_ENV 断言）+ 冒烟「POSIX 下快照存对 home」覆盖。
 - **失效症状**：快照存错 home 目录（或降级到项目内）。
-- **复查动作**：确认 dsh-subprocess 仍洗刷 DSH_* 变量；三档回退顺序仍正确；第三档落点为 `homedir/.dsh`（I24，勿回退成裸 homedir）。
+- **复查动作**：读 `dsh-shell-env/lib/index.js`——`DSH_ENV_PREFIX` 注册表与
+  `RESERVED_BASH_ENV_KEYS`（含 `DSH_HOME_ENV`）机制未变：模型侧 shell 工具的 DSH_*
+  变量由该注册表统一产出，用户随意导出的 DSH_HOME 不可见；三档回退顺序仍正确；第三档
+  落点为 `homedir/.dsh`（I24，勿回退成裸 homedir）。
 
 ### I19 快照索引两段式补全：manage list 字段补全 + messageTexts null 缓存
 - **依赖的官方行为**：`sessionQuery.readSession` 冷读整日志解压很贵（10 秒级），快照管理
   列表首屏不等冷标题/消息文本，由 client 异步二次请求补齐。
-- **出处**：`lib/index.js` manage titles/messages 端点 + `lib/client.js`（src/client）两段式。
+- **出处**：`lib/index.js` manage titles/messages 端点 + `lib/client.js`（src/client）两段式（**非官方耦合**：项目内时序约定，dsh 升级复查不涉及；改 manage 端点时复核）。
 - **探针/单测**：`tests/unit/client-pure.test.js`（buildTree）+ 冒烟「树形展开见标题/消息」。
 - **失效症状**：冷会话标题/消息永不补齐，或无文本消息每次刷新重复解压冷日志。
 - **复查动作**：确认 readSession 契约未变；messageTexts null 也缓存（避免重复冷读）。
@@ -191,10 +248,12 @@
 ### I20 批量删 tag 分块（每 100）：win32 命令行 32767 上限
 - **依赖的官方行为**：DSH pwsh 执行器把命令串作为 `-Command` 单个 argv 元素 spawn，Windows
   命令行 32767 字符上限。
-- **出处**：`lib/index.js` deleteSnapshotsByFilter / `lib/maintenance.js` purgeSession。
-- **探针/单测**：无直接探针；冒烟「长历史工作区批量删除」覆盖。
+- **出处**：官方部分 = `dsh-pwsh-local/lib/index.js`（命令串作为单个 argv 元素传 `-Command`）；项目部分 = `lib/index.js` deleteSnapshotsByFilter / `lib/maintenance.js` purgeSession 分块实现（**非官方耦合**，改批量命令时复核）。
+- **探针/单测**：`tests/probe/api-surface.test.js`（-Command 单 argv 断言）+ 冒烟「长历史工作区批量删除」覆盖。
 - **失效症状**：长历史工作区批量删 tag spawn 失败。
-- **复查动作**：新增批量命令时维持分块；上限值随 pwsh 执行器实现复核。
+- **复查动作**：读 `dsh-pwsh-local/lib/index.js` L75-78——命令串仍作为**单个 argv 元素**
+  传给 `-Command`（无中间 shell、无 shell-quoting 层），Windows 命令行 32767 字符上限的
+  生效前提未变；新增批量命令时维持分块（每 100，见本条目依赖行为）。
 
 ### I21 ps1 测试文件带 BOM（PS 5.1 无 BOM 按 ANSI 解析）
 - **依赖的官方行为**：Windows PowerShell 5.1 对无 BOM 的 .ps1 按 ANSI(GBK) 解析，中文路径乱码。
@@ -206,7 +265,7 @@
 ### I22 Client 查 snapshot-info 前必须等 ensureInit 回调
 - **依赖的官方行为**：Host 端 init 要跑数条 shell（建仓/loadIndex），是异步预热；快照捕获
   也是异步的。client 侧「单槽缓存 init promise + 有界轮询」是自有时序约定（非官方字段）。
-- **出处**：`src/client/util.js` ensureInit / `src/client/recall-node.js` UserRecallNode 轮询。
+- **出处**：`src/client/util.js` ensureInit / `src/client/recall-node.js` UserRecallNode 轮询（**非官方耦合**：项目自有时序约定，dsh 升级复查不涉及；改 client 轮询时复核）。
 - **探针/单测**：无直接探针；冒烟「冷启动撤回按钮出现」覆盖。
 - **失效症状**：冷启动误判 `has:false` 且不重试，撤回按钮永不出现。
 - **复查动作**：确认 init 仍为每会话一次的异步预热；轮询窗口/次数与快照耗时匹配。
@@ -214,7 +273,7 @@
 ### I23 manage list 同 id 去重须字段补全（磁盘先占位、内存后补）
 - **依赖的官方行为**：快照列表是「磁盘 dump + 内存缓存」并集，同一 id 可能磁盘先占位
   （root 缺失）、内存后补全；按「首次命中即丢弃」会让节点落「未知工作区」。
-- **出处**：`lib/index.js` manage list 的 push 补全逻辑 / collectAllSnapshotRecords。
+- **出处**：`lib/index.js` manage list 的 push 补全逻辑 / collectAllSnapshotRecords（**非官方耦合**：项目内并集去重实现，dsh 升级复查不涉及；改 manage list 时复核）。
 - **探针/单测**：无直接探针；冒烟「跨工作区快照树形归组正确」覆盖。
 - **失效症状**：树形一级节点落「未知工作区」，批量删除按工作区/会话匹配不到。
 - **复查动作**：确认 store 目录仍是 root 的单向哈希（磁盘反查 root 依赖 root.txt/index）。
