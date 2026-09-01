@@ -1,6 +1,6 @@
 {
   "name": "dsh-recall-plugin",
-  "version": "2.3.0",
+  "version": "2.3.1",
   "description": "DSH 消息撤回插件：在用户消息气泡旁加「撤回」按钮，把项目文件（独立影子 git 仓库快照）与对话历史（官方 fork）一并回退到该消息发送之前。",
   "type": "module",
   "repository": {

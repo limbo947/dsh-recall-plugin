@@ -2,9 +2,9 @@
 
 本文件格式遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循语义化版本。
 
-## [Unreleased]
+## [2.3.1] - 2026-09-01
 
-修复批次（PR #13 贡献，macOS 实机验证）+ 开发工具链与兼容性台账增强。
+修复批次（PR #13 贡献，macOS 实机验证；Windows 侧本仓库复核）。单测 285 → 290 例全绿（新增 `nextShadowPriority` 5 例）、`test:probe` 探针 29 → 31 例全绿（新增 `slots.entries` 双包探测）、`verify:host` 装配门禁全绿。
 
 ### 修复
 
