@@ -27,13 +27,13 @@ export interface StoreDumpInfo {
 // 并入 dump 后零新增进程。无 LINEAGE 段（脚本/Host 版本错位的理论场景）按
 // 无 lineage 处理，解析容错；lineage.json 损坏按空处理（与 loadLineage 的
 // 既有语义一致：损坏不致命，树退化为普通分组）。
-export function parseStoresDump(text) {
-  const map = new Map()
-  let cur = null
+export function parseStoresDump(text: string): Map<string, StoreDumpInfo> {
+  const map = new Map<string, StoreDumpInfo>()
+  let cur: StoreDumpInfo | null = null
   let inIndex = false
-  let indexLines = []
+  let indexLines: string[] = []
   let inLineage = false
-  let lineageLines = []
+  let lineageLines: string[] = []
   function flush() {
     if (!cur) return
     const raw = indexLines.join('\n').trim()

@@ -18,6 +18,13 @@ export interface SessionInfoCtx {
   sessions: { get(id: string): Session | undefined }
 }
 
+export interface SessionInfoApi {
+  sessionTitles: Map<string, string | null>
+  messageTexts: Map<string, string | null>
+  liveTitleFast(sessionId: string): string | null
+  liveMessageTextFast(sessionId: string | null | undefined, messageId: string | null | undefined): string | null
+}
+
 // 从事件序列里取最新一条 session/title（倒序，标题事件通常靠后）
 export function titleFromEvents(events: SessionEvent[] | null | undefined): string | null {
   if (!Array.isArray(events)) return null
@@ -44,13 +51,13 @@ export function messageTextFromEvents(events: SessionEvent[] | null | undefined,
   return null
 }
 
-export function createSessionInfo(ctx: SessionInfoCtx) {
+export function createSessionInfo(ctx: SessionInfoCtx): SessionInfoApi {
   // 会话标题缓存：值为 null 表示「查过、确实没有」（已删除会话），同样命中缓存
   const sessionTitles = new Map()
   // 消息文本缓存：null 也缓存（避免无文本消息每次刷新重复解压冷日志）
   const messageTexts = new Map()
 
-  function liveMessageTextFast(sessionId, messageId) {
+  function liveMessageTextFast(sessionId: string | null | undefined, messageId: string | null | undefined): string | null {
     if (!sessionId || !messageId) return null
     const key = String(sessionId) + '\u0000' + String(messageId)
     if (messageTexts.has(key)) return messageTexts.get(key)
@@ -63,7 +70,7 @@ export function createSessionInfo(ctx: SessionInfoCtx) {
     return text
   }
 
-  function liveTitleFast(sessionId) {
+  function liveTitleFast(sessionId: string): string | null {
     if (!sessionId) return null
     if (sessionTitles.has(sessionId)) return sessionTitles.get(sessionId)
     let t = null

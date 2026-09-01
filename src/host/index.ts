@@ -25,6 +25,11 @@ import { createRoutesCore } from './routes-core.js'
 import { createRoutesManage } from './routes-manage.js'
 import * as dshSettings from '@deepseek-ai/dsh-settings'
 import * as E from './errors.js'
+import type { HostContext, SessionQueryEngine, HttpRequest, HttpResponse } from '../types/dsh-contract.js'
+import type { Runtime, StoreInfo } from '../types/state.js'
+import type { StoreDumpInfo } from './dump-parse.js'
+import type { ResolvedConfig } from '../types/config.js'
+import type { ManageListItem } from '../types/api.js'
 
 export const name = 'dsh-recall-plugin'
 
@@ -43,7 +48,7 @@ export { Config }
 // config 由 cordis.patch.yml 的 insert 行 config 键下发（schema 默认值兜底），
 // 设置页「插件配置」卡片的用户覆盖经 settings namespace 热更新进 cfg
 // （见下方 installSettingsSection 接线）
-export function apply(ctx, config) {
+export function apply(ctx: HostContext, config: ResolvedConfig) {
   const webServer = ctx.webServer
 
   const cfg = createConfig(config)
@@ -64,12 +69,12 @@ export function apply(ctx, config) {
   // installSection 方法（0.1.2-alpha.2）或 register 核心 API（0.1.1-rc.2 及
   // 以前，此时手动复刻独立函数接线语义——注册 namespace、源指向 scope、
   // 卸载回退入口 config、watch 热更新）。
-  let readSettings = () => config
-  function applyResolvedConfig(resolved) {
+  let readSettings: () => unknown = () => config
+  function applyResolvedConfig(resolved: unknown): void {
     Object.assign(cfg, createConfig(resolved && typeof resolved === 'object' ? resolved : {}))
   }
   const settingsHooks = {
-    setSource: (fn) => { readSettings = fn },
+    setSource: (fn: () => unknown) => { readSettings = fn },
     onChange: () => applyResolvedConfig(readSettings()),
   }
   try {
@@ -126,8 +131,8 @@ export function apply(ctx, config) {
   // 会话标题/文本两段式读取（live 秒回，冷会话由 Client 异步补齐）
   const sessionInfo = createSessionInfo(ctx)
 
-  async function readJsonBody(req) {
-    const chunks = []
+  async function readJsonBody(req: HttpRequest): Promise<Record<string, unknown>> {
+    const chunks: Uint8Array[] = []
     let size = 0
     for await (const chunk of req) {
       size += chunk.length
@@ -139,29 +144,33 @@ export function apply(ctx, config) {
     return JSON.parse(text)
   }
 
-  function sendJson(res, status, body) {
+  function sendJson(res: HttpResponse, status: number, body: unknown): void {
     res.writeHead(status, { 'content-type': 'application/json; charset=utf-8' })
     res.end(JSON.stringify(body))
   }
 
   // 统一错误映射：业务失败与系统异常分离，文案与诊断解耦。code 给
   // Client 做分支判断，message 直接展示。
-  function errBody(error) {
-    const text = String(error && error.message ? error.message : error)
+  function errBody(error: unknown): { ok: false; code: string; message: string } {
+    // error 可能是 Error 实例或裸值：message 字段按未知形状断言读取
+    const e = error as { message?: string } | null | undefined
+    const text = String(e && e.message ? e.message : error)
     if (text === E.RECALL_BODY_TOO_LARGE) return { ok: false, code: E.RECALL_BODY_TOO_LARGE, message: '请求体超过 1MB 上限' }
     return { ok: false, code: E.RECALL_ERROR, message: text }
   }
 
   // 队列入队即占住后续快照，队列失败不堵队（catch 就地消化）。
-  function enqueue(task) {
+  // state.queue 是链尾哨兵，解析值从不被消费——catch 的 void 结果断言回
+  // Promise<void> 仅为满足类型（运行语义不变：下一条任务只依赖排队关系）。
+  function enqueue<T>(task: () => Promise<T>): Promise<T> {
     const run = state.queue.then(task)
-    state.queue = run.catch(() => {})
+    state.queue = run.catch(() => {}) as Promise<void>
     return run
   }
 
   // 通用并发限制器：冷会话标题/消息文本补齐会 readSession 整日志解压，
   // 全量 Promise.all 会同时压垮磁盘/CPU，限制同时最多 concurrency 个任务。
-  async function runLimited(tasks, concurrency) {
+  async function runLimited<T>(tasks: Array<() => Promise<T>>, concurrency: number): Promise<void> {
     const limit = concurrency > 0 ? concurrency : 4
     let index = 0
     const workers = Array.from({ length: Math.min(limit, tasks.length) }, async () => {
@@ -175,7 +184,7 @@ export function apply(ctx, config) {
 
   // 归一化 cwd/root 路径用于跨会话同工作区比对：Windows 大小写不敏感 +
   // 去掉尾部分隔符，避免 D:\Foo 与 d:\foo\ 误判为不同目录。
-  function normalizeWorkdir(path) {
+  function normalizeWorkdir(path: string): string {
     if (!path) return ''
     let p = String(path)
     return (process.platform === 'win32' ? p.toLowerCase() : p).replace(/[\\/]+$/, '')
@@ -184,7 +193,7 @@ export function apply(ctx, config) {
   // 回退前重保护检查（P0-1）：目标工作区有 agent 正在跑时拒绝预览/撤回。
   // 保守策略——不做自动取消，仅拦下操作并提示先停止。守卫式访问只为防御
   // 「未来版本改名 / agent 服务未装配」，失败视为「不忙」（fail-open）。
-  function agentBusy(sessionId, root) {
+  function agentBusy(sessionId: string | null, root: string | null): boolean {
     let reg = null
     try { reg = ctx.agents } catch (error) { return false }
     if (!reg) return false
@@ -255,7 +264,7 @@ export function apply(ctx, config) {
       if (cwd) cwds.add(cwd)
     }
     try {
-      const querySvc = ctx.get('sessionQuery')
+      const querySvc = ctx.get<SessionQueryEngine>('sessionQuery')
       if (querySvc && typeof querySvc.listSessions === 'function') {
         for (const record of await querySvc.listSessions()) {
           const cwd = record && record.header && record.header.cwd
@@ -268,7 +277,7 @@ export function apply(ctx, config) {
 
   // 一条 shell dump 全部 store 元数据（容器子目录 + 降级候选目录的 root.txt
   // 与 index.json），manage list 与 delete 兜底共用。
-  async function dumpStores() {
+  async function dumpStores(): Promise<Map<string, StoreDumpInfo>> {
     const container = await rt.resolveHomeContainer()
     const extras = Array.from(await collectCwds()).map((cwd) => cwd + (rt.isWin ? '\\' : '/') + '.dsh-recall-snapshots')
     try {
@@ -277,14 +286,14 @@ export function apply(ctx, config) {
     } catch (error) {
       // 同 refreshListCacheInBackground：dump 失败按空 Map 继续是设计行为，
       // 但失败原因必须留痕，否则列表缺数据时无从排查
-      console.error('recall stores dump failed:', String(error && error.stack || error))
+      console.error('recall stores dump failed:', String((error as Error && (error as Error).stack) || error))
       return new Map()
     }
   }
 
   // 磁盘反查某快照归属的 store：dump 全部 index 后按 id 查找。delete 的
   // 兜底路径用它消灭「列表可见但内存缺失 ⇒ 误报不存在」。
-  async function locateSnapshotOnDisk(id) {
+  async function locateSnapshotOnDisk(id: string): Promise<{ store: StoreInfo; root: string } | null> {
     if (!id) return null
     const dump = await dumpStores()
     const hints = new Map()
@@ -310,7 +319,7 @@ export function apply(ctx, config) {
   // 批量删除使用。去重只按 id——同一消息 ID 全局唯一。
   async function collectAllSnapshotRecords() {
     const records = new Map()
-    function add(id, root, sessionId, time) {
+    function add(id: string, root: string | null, sessionId: string | null, time: unknown): void {
       if (!id || typeof id !== 'string') return
       const old = records.get(id)
       if (!old) {
@@ -373,7 +382,7 @@ export function apply(ctx, config) {
     handler: async (req, res) => {
       const path = (req.url || '').split('?')[0]
       const name = path.replace(/^\/api\/recall\/?/, '').split('/')[0]
-      const endpoint = endpoints[name]
+      const endpoint = (endpoints as Record<string, (args: unknown) => Promise<unknown>>)[name]
       if (!endpoint) {
         sendJson(res, 404, { ok: false, code: E.RECALL_UNKNOWN_ENDPOINT, message: 'unknown endpoint: ' + name })
         return
@@ -419,7 +428,7 @@ export function apply(ctx, config) {
       const cwd = session && session.header && session.header.cwd
       if (cwd && !warmupRoots.has(cwd)) warmupRoots.set(cwd, session.id)
     }
-    const querySvc = ctx.get('sessionQuery')
+    const querySvc = ctx.get<SessionQueryEngine>('sessionQuery')
     if (querySvc && typeof querySvc.listSessions === 'function') {
       try {
         const records = await querySvc.listSessions()
@@ -436,7 +445,8 @@ export function apply(ctx, config) {
     for (const [cwd, sessionId] of warmupRoots) {
       Promise.resolve(rt.resolveStore(cwd))
         .then(() => rt.tryUpgradeToHome(cwd))
-        .then((store) => rt.ensureGit(cwd, store))
+        // store 缺失时跳过 ensureGit：原实现 store.git 会抛错并被下方 catch 吞掉，语义等价
+        .then((store) => (store ? rt.ensureGit(cwd, store) : null))
         .then(() => snaps.loadIndex(cwd, sessionId))
         .then(() => snaps.rebuildOrphans(cwd, sessionId))
         .then(() => rt.cleanupLegacy(cwd))

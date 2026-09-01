@@ -55,7 +55,7 @@ export const DEFAULTS: ResolvedConfig = {
 export function createConfig(raw: RawConfig): ResolvedConfig {
   const cfg: RawConfig = raw && typeof raw === 'object' ? raw : {}
 
-  function pickNumber(value, fallback, min) {
+  function pickNumber(value: unknown, fallback: number, min: number): number {
     const n = typeof value === 'number' ? value : parseInt(String(value == null ? '' : value), 10)
     if (!Number.isFinite(n) || n < min) return fallback
     return n

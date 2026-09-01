@@ -44,7 +44,7 @@ export interface SharedState {
   indexHealthy: Set<string>
   indexTruncated: Set<string>
   gitReady: Set<string>
-  cutSeqCache: Map<string, number>
+  cutSeqCache: Map<string, number | null>
   homeRetryAt: Map<string, number>
   gcLastAt: Map<string, number>
   gcCount: Map<string, number>
@@ -62,9 +62,16 @@ export interface ShellRunOptions {
   stdin?: string
 }
 
-// Runtime（rt）接口骨架——store.js createRuntime 返回，六文件签名统一消费。
-// M6 定稿：本骨架只列当前已知消费面，M6 按 store/snapshots/maintenance/
-// routes-core/routes-manage/index 实际调用补齐。
+// ensureGit 结果（M1-D2：失败原因必须传出——captureSnapshot 分类成
+// snapFeedback 的可行动提示；init/预热调用方忽略返回值）
+export interface EnsureGitResult {
+  ok: boolean
+  error?: string
+}
+
+// Runtime（rt）接口——store.js createRuntime 返回，M6 按六文件实际消费面定稿：
+// snapshots/maintenance/routes-core/routes-manage/index 统一消费它，工厂分层
+// 的依赖注入边界（ctx 不解构、不直接摸官方服务）。
 export interface Runtime {
   state: SharedState
   isWin: boolean
@@ -72,13 +79,15 @@ export interface Runtime {
   runShell(cmd: string, opts?: ShellRunOptions): Promise<string>
   runShellMeta(cmd: string, opts?: ShellRunOptions): Promise<{ text: string; truncated: boolean }>
   recordError(text: string): void
-  ensureGit(root: string, store: StoreInfo | null): Promise<unknown>
+  writeTextViaShell(file: string, text: string): Promise<void>
   resolveRoot(sessionId: string | null): Promise<string | null>
-  resolveStore(root: string): Promise<StoreInfo | null>
+  resolveGit(): Promise<string>
+  homeDirFor(root: string): Promise<string | null>
+  resolveHomeContainer(): Promise<string | null>
+  resolveStore(root: string): Promise<StoreInfo>
   storeFromDir(dir: string, home: boolean): StoreInfo
   tryUpgradeToHome(root: string): Promise<StoreInfo | null>
-  resolveHomeContainer(): Promise<string | null>
-  resolveGit(): Promise<string>
-  writeTextViaShell(file: string, body: string): Promise<unknown>
+  ensureGit(root: string, store: StoreInfo): Promise<EnsureGitResult>
   cleanupLegacy(root: string): void
+  cleanupAfterGitFailure(command: string): Promise<void>
 }

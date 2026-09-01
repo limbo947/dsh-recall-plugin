@@ -9,8 +9,43 @@
 
 import { isSafetySnapshotId } from './snapshots.js'
 import { parseExcludeDump } from './dump-parse.js'
+import type { Runtime, SharedState, StoreInfo } from '../types/state.js'
+import type { HostContext, SessionQueryEngine, SettingsService, SessionLogSnapshot } from '../types/dsh-contract.js'
+import type { ResolvedConfig } from '../types/config.js'
+import type { StoreDumpInfo } from './dump-parse.js'
+import type { SnapshotsApi, RollbackResult } from './snapshots.js'
+import type { MaintenanceApi } from './maintenance.js'
+import type { SessionInfoApi } from './session-info.js'
+import type { ManageListItem, ManageResponse, ManageArgs, ExcludeSetArgs, ExcludeSetResponse } from '../types/api.js'
+import type { titleFromEvents, messageTextFromEvents } from './session-info.js'
 
-export function createRoutesManage(deps) {
+export interface RoutesManageDeps {
+  ctx: HostContext
+  rt: Runtime
+  snaps: SnapshotsApi
+  maint: MaintenanceApi
+  state: SharedState
+  cfg: ResolvedConfig
+  supported: boolean
+  enqueue<T>(task: () => Promise<T>): Promise<T>
+  runLimited<T>(tasks: Array<() => Promise<T>>, concurrency: number): Promise<void>
+  listExcludeFiles(): Promise<Map<string, { store: StoreInfo; roots: string[] }>>
+  dumpStores(): Promise<Map<string, StoreDumpInfo>>
+  locateSnapshotOnDisk(id: string): Promise<{ store: StoreInfo; root: string } | null>
+  collectAllSnapshotRecords(): Promise<Map<string, { id: string; root: string | null; sessionId: string | null; time: number }>>
+  listCache: { at: number; items: ManageListItem[] | null; stale: boolean; refreshing: Promise<void> | null }
+  excludeCache: { at: number; payload: { ok: boolean; files: Array<{ path: string; home: boolean; roots: string[]; content: string }>; unsupported?: boolean } | null }
+  usageCache: { at: number; payload: { ok: true; bytes: number; gitAvailable: boolean; homeStores: number; fallbackStores: number } | null }
+  sessionInfo: SessionInfoApi
+  titleFromEvents: typeof titleFromEvents
+  messageTextFromEvents: typeof messageTextFromEvents
+  applyResolvedConfig(resolved: unknown): void
+  readSettings(): unknown
+  DEFAULTS: ResolvedConfig
+  E: typeof import('./errors.js')
+}
+
+export function createRoutesManage(deps: RoutesManageDeps) {
   const {
     ctx, rt, snaps, maint, state, cfg, supported, enqueue, runLimited,
     listExcludeFiles, dumpStores, locateSnapshotOnDisk, collectAllSnapshotRecords,
@@ -21,8 +56,8 @@ export function createRoutesManage(deps) {
 
   // PF-6：list items 构建（磁盘 dump + 内存并集 + 排序）从 list 分支抽出——
   // 同步路径与 stale 后台刷新共用同一实现（改一处漏一处的风险随合并消失）。
-  async function buildListItems() {
-    const allItems = []
+  async function buildListItems(): Promise<ManageListItem[]> {
+          const allItems: ManageListItem[] = []
 
     // 磁盘全量：一条 shell dump。标题只查 live/缓存（liveTitleFast，同步
     // 瞬时）——冷会话标题由 Client 拿到列表后异步调 titles 补齐。
@@ -33,8 +68,8 @@ export function createRoutesManage(deps) {
     }
     // 去重只用 id（消息 ID 全局唯一）：带 root 进 key 会让同一快照因
     // 「磁盘来源 root 缺失 / 内存来源 root 齐全」出现两条重复行
-    const byId = new Map()
-    function push(id, time, root, sessionId) {
+    const byId = new Map<string, ManageListItem>()
+    function push(id: string, time: number | null, root: string | null, sessionId: string | null | undefined): void {
       if (!id || typeof id !== 'string') return
       // F-G1 防御性展示过滤：修复前 rebuildOrphans 曾把 safety tag
       // （pre-rollback-<ts>）strip 前缀后写进 index.json——存量污染条目
@@ -43,16 +78,16 @@ export function createRoutesManage(deps) {
       if (isSafetySnapshotId(id)) return
       const old = byId.get(id)
       if (!old) {
-        const rec = {
+        const rec: ManageListItem = {
           id,
           time: typeof time === 'number' ? time : 0,
           root: root || null,
-          workspace: root ? root.replace(/[\\/]+$/, '').split(/[\\/]/).pop() : null,
+          workspace: root ? (root.replace(/[\\/]+$/, '').split(/[\\/]/).pop() ?? null) : null,
           sessionId: sessionId || null,
-          sessionTitle: liveTitleFast(sessionId)
+          sessionTitle: liveTitleFast(sessionId || '')
         }
         // 消息文本只放已确认值：live 命中字符串则带，否则不设字段。
-        const liveText = liveMessageTextFast(sessionId, id)
+        const liveText = liveMessageTextFast(sessionId || '', id)
         if (liveText) rec.messageText = liveText
         byId.set(id, rec)
         allItems.push(rec)
@@ -109,7 +144,7 @@ export function createRoutesManage(deps) {
   // PF-6：缓存非空（含 stale）时直接由缓存 items 构造 records，省一次
   // 全量 dumpStores——删除以「用户当前所见」为准（stale 说明有新快照未
   // 入列表，用户没看到的也不在删除预期内）；缓存为空才全量收集。
-  async function deleteSnapshotsByFilter(match, sessionId) {
+  async function deleteSnapshotsByFilter(match: (rec: { root: string | null; sessionId: string | null }) => boolean, sessionId: string | null): Promise<number> {
     let records
     if (Array.isArray(listCache.items) && listCache.items.length) {
       records = new Map()
@@ -120,16 +155,16 @@ export function createRoutesManage(deps) {
     } else {
       records = await collectAllSnapshotRecords()
     }
-    const byRoot = new Map()
+    const byRoot = new Map<string, string[]>()
     for (const rec of records.values()) {
       if (!match(rec) || !rec.root) continue
       if (!byRoot.has(rec.root)) byRoot.set(rec.root, [])
-      byRoot.get(rec.root).push(rec.id)
+      byRoot.get(rec.root)!.push(rec.id)
     }
     let deleted = 0
     await enqueue(async () => {
       for (const [root, rootIds] of byRoot) {
-        let store = state.stores.get(root)
+        let store: StoreInfo | null = state.stores.get(root) || null
         if (!store) {
           try { store = await rt.resolveStore(root) } catch (error) { store = null }
         }
@@ -167,7 +202,7 @@ export function createRoutesManage(deps) {
   // 漏删真实快照。磁盘枚举到的 store 即使 root.txt 丢失也直接按目录操作。
   async function deleteAllSnapshots() {
     return enqueue(async () => {
-      const stores = new Map()
+      const stores = new Map<string, { store: StoreInfo; root: string | null; entries?: unknown[] }>()
       for (const [root, store] of state.stores.entries()) {
         if (store && store.dir) stores.set(store.dir, { store, root })
       }
@@ -270,7 +305,7 @@ export function createRoutesManage(deps) {
       return payload
     },
 
-    'exclude-set': async (args) => {
+    'exclude-set': async (args: ExcludeSetArgs): Promise<ExcludeSetResponse> => {
       if (!supported) return { ok: false, unsupported: true }
       const path = args && args.path ? String(args.path) : ''
       const content = args && typeof args.content === 'string' ? args.content : ''
@@ -292,10 +327,10 @@ export function createRoutesManage(deps) {
         gcSnaps: Boolean(process.env && process.env.DSH_RECALL_GC_SNAPS),
         gcHours: Boolean(process.env && process.env.DSH_RECALL_GC_HOURS),
       }
-      let overridden = {}
+      let overridden: Record<string, unknown> = {}
       let writable = false
       try {
-        const settings = ctx.get('settings')
+        const settings = ctx.get<SettingsService>('settings')
         if (settings && typeof settings.describe === 'function') {
           const list = settings.describe()
           const ours = (Array.isArray(list) ? list : []).find((d) => d && d.ns === 'dsh-recall')
@@ -324,9 +359,11 @@ export function createRoutesManage(deps) {
 
     // 设置页「插件配置」卡片存配置：白名单字段 + 类型清洗后经 settings.update
     // 写进用户层，watch 链路把新值热更新进 cfg，无需重启。
-    'config-set': async (args) => {
-      const patch = args && args.patch && typeof args.patch === 'object' ? args.patch : {}
-      const clean = {}
+    'config-set': async (args: unknown): Promise<{ ok: boolean; code?: string; message?: string }> => {
+      const patch = args && (args as { patch?: unknown }).patch && typeof (args as { patch?: unknown }).patch === 'object'
+        ? (args as { patch: Record<string, unknown> }).patch
+        : {}
+      const clean: Partial<ResolvedConfig> = {}
       if (patch.gcSnaps !== undefined) clean.gcSnaps = Number(patch.gcSnaps)
       if (patch.gcHours !== undefined) clean.gcHours = Number(patch.gcHours)
       if (patch.maxFileBytes !== undefined) clean.maxFileBytes = Number(patch.maxFileBytes)
@@ -350,22 +387,23 @@ export function createRoutesManage(deps) {
         clean.baseExcludes = patch.baseExcludes.filter((p) => typeof p === 'string' && p.trim())
       }
       if (!Object.keys(clean).length) return { ok: false, code: E.RECALL_EMPTY_PATCH, message: '没有可写入的配置字段' }
-      let settings = null
-      try { settings = ctx.get('settings') } catch (error) { settings = null }
+      let settings: SettingsService | null | undefined = null
+          try { settings = ctx.get<SettingsService>('settings') } catch (error) { settings = null }
       if (!settings || typeof settings.update !== 'function') {
         return { ok: false, code: E.RECALL_SETTINGS_UNAVAILABLE, message: '设置服务不可用：请在 profile 的 cordis.patch.yml 按 id: recall 覆盖配置' }
       }
       try {
         await settings.update('dsh-recall', clean)
       } catch (error) {
-        return { ok: false, code: E.RECALL_SETTINGS_WRITE_FAILED, message: '配置写入失败：' + String(error && error.message ? error.message : error) }
+        const se = error as { message?: string } | null | undefined
+        return { ok: false, code: E.RECALL_SETTINGS_WRITE_FAILED, message: '配置写入失败：' + String(se && se.message ? se.message : error) }
       }
       return { ok: true }
     },
 
     // 设置页「快照管理」卡片：列表 / 磁盘占用 / 单条删除 / 手动 gc。
     // 全部走串行队列——删除 tag 与 gc 与快照争的是同一个 git 仓库。
-    'manage': async (args) => {
+    'manage': async (args: ManageArgs): Promise<ManageResponse> => {
       if (!supported) return { ok: false, unsupported: true }
       const op = args && args.op ? String(args.op) : 'list'
       const sessionId = args && args.sessionId ? String(args.sessionId) : null
@@ -389,16 +427,16 @@ export function createRoutesManage(deps) {
       }
       if (op === 'titles') {
         // supported 已在 manage 入口短路（A3：此处重复检查是死代码）
-        const ids = Array.from(new Set(
-          (Array.isArray(args && args.sessionIds) ? args.sessionIds.map(String) : []).filter(Boolean)
+        const ids: string[] = Array.from(new Set(
+          (Array.isArray(args && args.sessionIds) ? args.sessionIds! : []).map(String).filter(Boolean)
         )).slice(0, 100)
-        const out = {}
+        const out: Record<string, string | null> = {}
         // 并发限 4：冷标题 readSession 是重 IO，限制后列表不受影响、标题渐进补齐
         await runLimited(ids.map((sid) => async () => {
           if (out[sid] !== undefined) return
-          let title = liveTitleFast(sid)
+          let title: string | null = liveTitleFast(sid)
           if (title === null) {
-            const query = ctx.get('sessionQuery')
+            const query = ctx.get<SessionQueryEngine>('sessionQuery')
             if (query && typeof query.readSession === 'function') {
               try {
                 const log = await query.readSession(sid)
@@ -413,22 +451,22 @@ export function createRoutesManage(deps) {
       }
       if (op === 'messages') {
         // supported 已在 manage 入口短路（A3：此处重复检查是死代码）
-        const reqs = Array.isArray(args && args.requests) ? args.requests.slice(0, 200) : []
-        const bySession = new Map()
+        const reqs = Array.isArray(args && args.requests) ? args.requests!.slice(0, 200) : []
+        const bySession = new Map<string, string[]>()
         for (const r of reqs) {
           const sid = r && r.sessionId ? String(r.sessionId) : null
           const mid = r && r.messageId ? String(r.messageId) : null
           if (!sid || !mid) continue
           if (!bySession.has(sid)) bySession.set(sid, [])
-          bySession.get(sid).push(mid)
+          bySession.get(sid)!.push(mid)
         }
-        const texts = {}
+        const texts: Record<string, string | null> = {}
         await runLimited(Array.from(bySession.entries()).map(([sid, mids]) => async () => {
           // 该会话所有消息都已缓存（含 null）时，不必 readSession 冷读
           const allCached = mids.every((mid) => messageTexts.has(String(sid) + '\u0000' + String(mid)))
-          let log = null
+          let log: SessionLogSnapshot | null = null
           if (!allCached) {
-            const query = ctx.get('sessionQuery')
+            const query = ctx.get<SessionQueryEngine>('sessionQuery')
             if (query && typeof query.readSession === 'function') {
               try {
                 log = await query.readSession(sid)
@@ -439,7 +477,7 @@ export function createRoutesManage(deps) {
             const key = String(sid) + '\u0000' + String(mid)
             // 缓存命中（含 null）直接复用，避免已确认无文本的消息反复冷读
             if (messageTexts.has(key)) {
-              texts[mid] = messageTexts.get(key)
+              texts[mid] = messageTexts.get(key) ?? null
               continue
             }
             let text = liveMessageTextFast(sid, mid)
@@ -490,7 +528,9 @@ export function createRoutesManage(deps) {
             bytes += perStore.get(store.dir) || 0
           }
         }
-        const payload = { ok: true, bytes, gitAvailable: state.gitExe !== '', homeStores, fallbackStores }
+        // ok: true 显式标注：无上下文时对象字面量 true 会宽化为 boolean，
+        // 与 usageCache.payload 的 { ok: true } 契约类型不匹配（TS 字面量宽化）
+        const payload: { ok: true; bytes: number; gitAvailable: boolean; homeStores: number; fallbackStores: number } = { ok: true, bytes, gitAvailable: state.gitExe !== '', homeStores, fallbackStores }
         if (!sessionId) {
           usageCache.at = Date.now()
           usageCache.payload = payload
@@ -522,7 +562,7 @@ export function createRoutesManage(deps) {
         // 「不存在」。解析链：内存命中 → Client 透传的条目 root → 磁盘 index 反查。
         let snap = state.snapshots.get(id) || null
         let snapRoot = snap ? snap.root : root
-        let store = null
+        let store: StoreInfo | null = null
         if (snapRoot) {
           try { store = await rt.resolveStore(snapRoot) } catch (error) { store = null }
         }
@@ -541,11 +581,11 @@ export function createRoutesManage(deps) {
           // 兜底路径到这里时内存可能还没载入过该 root 的索引——先 loadIndex
           // 补齐内存视图，再删目标条目后重写，避免用残缺内存覆盖同 store
           // 其余磁盘快照。
-          if (!state.indexLoaded.has(finalRoot)) {
+          if (finalRoot && !state.indexLoaded.has(finalRoot)) {
             try { await snaps.loadIndex(finalRoot, sessionId) } catch (error) { /* 载入失败照常重写，退化为旧行为 */ }
           }
           state.snapshots.delete(id)
-          await snaps.saveIndex(finalRoot, sessionId)
+          await snaps.saveIndex(finalRoot!, sessionId)
           // 列表缓存失效：Client 删除后会立刻 refresh，必须看到最新状态
           listCache.items = null
           usageCache.payload = null
@@ -601,8 +641,8 @@ export function createRoutesManage(deps) {
     // settings RPC 的 replace 明确是「restoration/reset 路径」。老版本服务
     // 没有 replace 时降级 settings.update 写 DEFAULTS。
     'config-reset': async () => {
-      let settings = null
-      try { settings = ctx.get('settings') } catch (error) { settings = null }
+      let settings: SettingsService | null | undefined = null
+      try { settings = ctx.get<SettingsService>('settings') } catch (error) { settings = null }
       if (!settings || typeof settings.update !== 'function') {
         return { ok: false, code: E.RECALL_SETTINGS_UNAVAILABLE, message: '设置服务不可用：请在 profile 的 cordis.patch.yml 按 id: recall 覆盖配置' }
       }
@@ -610,10 +650,11 @@ export function createRoutesManage(deps) {
         if (typeof settings.replace === 'function') {
           await settings.replace('dsh-recall', {})
         } else {
-          await settings.update('dsh-recall', Object.assign({}, DEFAULTS, { baseExcludes: DEFAULTS.baseExcludes.slice() }))
+          await settings.update('dsh-recall', Object.assign({}, DEFAULTS, { baseExcludes: DEFAULTS.baseExcludes.slice() }) as unknown as Record<string, unknown>)
         }
       } catch (error) {
-        return { ok: false, code: E.RECALL_SETTINGS_WRITE_FAILED, message: '恢复默认失败：' + String(error && error.message ? error.message : error) }
+        const re = error as { message?: string } | null | undefined
+        return { ok: false, code: E.RECALL_SETTINGS_WRITE_FAILED, message: '恢复默认失败：' + String(re && re.message ? re.message : error) }
       }
       // 重置后热更运行中的 cfg（与 config-set 同链路的 watch 触发，这里做
       // 双保险：descriptor 已变更，applyResolvedConfig 立即落地）

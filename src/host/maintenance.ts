@@ -17,17 +17,26 @@
 // 每 gcSnaps 条快照或距上次 gc gcHours 小时，先到先触发。默认「50 条或
 // 24 小时」——重活（gc）一天至多一次的量级，轻会话用户也不会等太久。
 
+import type { Runtime, StoreInfo, SnapshotInfo } from '../types/state.js'
+import type { HostContext, SessionQueryEngine } from '../types/dsh-contract.js'
+import type { ResolvedConfig } from '../types/config.js'
+import type { SnapshotsApi } from './snapshots.js'
+
 // P1-3 纯逻辑：按 root 分组选出超限部分的最旧快照（time 升序，time=0 孤儿
 // 最旧优先），模块级导出供 tests/unit 直接钉边界；工厂内 enforceLimits 复用。
-export function selectOverLimitVictims(snapshots, limit) {
+export interface SnapshotLite {
+  id: string
+  time: number
+}
+export function selectOverLimitVictims(snapshots: Map<string, SnapshotInfo>, limit: number): Map<string, SnapshotLite[]> {
   if (!limit || limit <= 0) return new Map() // 0 或负值 = 不限制
-  const byRoot = new Map()
+  const byRoot = new Map<string, SnapshotLite[]>()
   for (const [id, s] of snapshots.entries()) {
     if (!s || !s.root) continue
     if (!byRoot.has(s.root)) byRoot.set(s.root, [])
-    byRoot.get(s.root).push({ id, time: s.time })
+          byRoot.get(s.root)!.push({ id, time: s.time })
   }
-  const victims = new Map()
+  const victims = new Map<string, SnapshotLite[]>()
   for (const [root, list] of byRoot) {
     if (list.length <= limit) continue
     const excess = list.length - limit
@@ -41,21 +50,30 @@ export function selectOverLimitVictims(snapshots, limit) {
 // S2-3 按时间保留的纯逻辑：retentionDays <= 0 不启用；按 root 分组，
 // 命中「time > 0 且早于 cutoff」的入选（time=0 孤儿视为最旧，一并最先
 // 清——与 selectOverLimitVictims 同构）。模块级导出供单测钉边界。
-export function selectExpiredVictims(snapshots, retentionDays, now) {
+export function selectExpiredVictims(snapshots: Map<string, SnapshotInfo>, retentionDays: number, now: number): Map<string, SnapshotLite[]> {
   if (!retentionDays || retentionDays <= 0) return new Map()
   const cutoff = (typeof now === 'number' ? now : Date.now()) - retentionDays * 86400000
-  const byRoot = new Map()
+  const byRoot = new Map<string, SnapshotLite[]>()
   for (const [id, s] of snapshots.entries()) {
     if (!s || !s.root) continue
     // time=0 孤儿（rebuildOrphans 重建）无真实时间，视为最旧列入
     if (s.time > 0 && s.time >= cutoff) continue
     if (!byRoot.has(s.root)) byRoot.set(s.root, [])
-    byRoot.get(s.root).push({ id, time: s.time })
+    byRoot.get(s.root)!.push({ id, time: s.time })
   }
   return byRoot
 }
 
-export function createMaintenance(ctx, rt, snaps, config) {
+export interface MaintenanceApi {
+  maybeMaintain(sessionId: string): Promise<void>
+  runGc(sessionId: string, force: boolean): Promise<boolean>
+  runGcAll(): Promise<boolean>
+  enforceLimits(): Promise<number>
+  enforceRetention(): Promise<number>
+  sweepDeletedSessions(): Promise<void>
+}
+
+export function createMaintenance(ctx: HostContext, rt: Runtime, snaps: SnapshotsApi, config: ResolvedConfig): MaintenanceApi {
   const sessions = ctx.sessions
   const state = rt.state
   // 平台选择的脚本模板（gc/purge 两套模板同名导出）
@@ -64,16 +82,16 @@ export function createMaintenance(ctx, rt, snaps, config) {
   // 删除一个会话的全部快照：按 root 分组（同一会话可能换过工作目录），
   // tag 分块删除规避命令行长度上限，索引重写交给 snaps.saveIndex。
   // best-effort：单块失败只记日志，剩余块继续；tag 残留由下次清理幂等收尾。
-  async function purgeSession(sessionId) {
-    const byRoot = new Map()
+  async function purgeSession(sessionId: string): Promise<number> {
+    const byRoot = new Map<string, string[]>()
     for (const [id, s] of state.snapshots.entries()) {
       if (!s || s.sessionId !== sessionId) continue
       if (!byRoot.has(s.root)) byRoot.set(s.root, [])
-      byRoot.get(s.root).push(id)
+            byRoot.get(s.root)!.push(id)
     }
     let purged = 0
     for (const [root, ids] of byRoot) {
-      let store = state.stores.get(root)
+      let store: StoreInfo | null = state.stores.get(root) || null
       if (!store) {
         // 冷启动时 store 缓存可能还没建：现场解析一次而不是直接跳过——
         // 跳过会让该 root 的快照永远清不掉（sweep 每轮都 miss）
@@ -110,19 +128,19 @@ export function createMaintenance(ctx, rt, snaps, config) {
   // titles 半项（PF-7 原案）：探针（tests/probe/api-surface.test.js）确认
   // SessionHeader 无 title 字段（标题住在事件日志里）→ 冷标题无法走
   // listSessions，titles 冷读维持 readSession 现状。
-  async function sweepDeletedSessions() {
-    const ids = new Set()
+  async function sweepDeletedSessions(): Promise<void> {
+    const ids = new Set<string>()
     for (const s of state.snapshots.values()) {
       if (s && s.sessionId) ids.add(s.sessionId)
     }
     if (!ids.size) return
-    const query = ctx.get('sessionQuery')
+    const query = ctx.get<SessionQueryEngine>('sessionQuery')
     if (!query || typeof query.listSessions !== 'function') return
-    let diskIds
+    let diskIds: Set<string>
     try {
       diskIds = new Set(((await query.listSessions()) || [])
         .map((r) => r && r.header && r.header.id)
-        .filter(Boolean))
+        .filter((v): v is string => Boolean(v)))
     } catch (error) {
       return
     }
@@ -144,7 +162,7 @@ export function createMaintenance(ctx, rt, snaps, config) {
     if (!victimsMap.size) return 0
     let dropped = 0
     for (const [root, victims] of victimsMap) {
-      let store = state.stores.get(root)
+      let store: StoreInfo | null = state.stores.get(root) || null
       if (!store) {
         try { store = await rt.resolveStore(root) } catch (error) { store = null }
       }
@@ -168,12 +186,12 @@ export function createMaintenance(ctx, rt, snaps, config) {
   // enforceLimits 同款（tag 分块删除 + saveIndex + 留痕），与条数上限
   // 各自独立触发，在同一轮 gc 周期里先后执行。时间维度的删除同样
   // 静默丢历史撤回点，故 console.error 留痕与 enforceLimits 一致。
-  async function enforceRetention() {
+  async function enforceRetention(): Promise<number> {
     const victimsMap = selectExpiredVictims(state.snapshots, config.retentionDays, Date.now())
     if (!victimsMap.size) return 0
     let dropped = 0
     for (const [root, victims] of victimsMap) {
-      let store = state.stores.get(root)
+      let store: StoreInfo | null = state.stores.get(root) || null
       if (!store) {
         try { store = await rt.resolveStore(root) } catch (error) { store = null }
       }
@@ -197,7 +215,7 @@ export function createMaintenance(ctx, rt, snaps, config) {
   // 跳过阈值检查但仍走同一条串行队列调用方——与快照天然互斥的约束不变。
   // 失败也推进 gcLastAt：gc 失败往往是环境性的（磁盘/杀软），不推进时间戳
   // 会让后续每条消息都重试一次重量级 gc，把队列堵住。
-  async function runGc(sessionId, force) {
+  async function runGc(sessionId: string, force: boolean): Promise<boolean> {
     const root = await rt.resolveRoot(sessionId)
     if (!root) return false
     const store = state.stores.get(root)
@@ -228,8 +246,8 @@ export function createMaintenance(ctx, rt, snaps, config) {
   // store 全集取内存缓存（启动预热与历次操作会填齐已知工作区）；逐个
   // best-effort，单个失败记错误继续。调用方（manage 端点）把它排进同一条
   // 串行队列，与快照天然互斥，无 git 锁竞态。
-  async function runGcAll() {
-    const stores = Array.from(new Set(Array.from(state.stores.values()).filter(Boolean)))
+  async function runGcAll(): Promise<boolean> {
+    const stores = Array.from(new Set(Array.from(state.stores.values()).filter((s): s is StoreInfo => Boolean(s))))
     if (!stores.length || !state.gitExe) return false
     try {
       await sweepDeletedSessions()
@@ -264,7 +282,7 @@ export function createMaintenance(ctx, rt, snaps, config) {
   }
 
   // 每条消息快照后串行调用（见 index.js 事件接线）
-  async function maybeMaintain(sessionId) {
+  async function maybeMaintain(sessionId: string): Promise<void> {
     await runGc(sessionId, false)
   }
 

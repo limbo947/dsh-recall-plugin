@@ -160,10 +160,20 @@ export interface AgentRegistry {
 
 // ---- webServer（HTTP API 注册）----
 
+// 插件实际消费的 HTTP 请求/响应面（req.url + async 迭代读 body；res.writeHead/end）
+export interface HttpRequest {
+  url?: string
+  [Symbol.asyncIterator](): AsyncIterator<Uint8Array>
+}
+export interface HttpResponse {
+  writeHead(status: number, headers?: Record<string, string>): unknown
+  end(body?: string): unknown
+}
+
 export interface WebRoute {
   kind: 'prefix' | 'exact'
   path: string
-  handler: (req: unknown, res: unknown) => unknown
+  handler: (req: HttpRequest, res: HttpResponse) => unknown
 }
 
 export interface WebServer {

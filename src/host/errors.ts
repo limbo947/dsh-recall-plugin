@@ -10,45 +10,45 @@
  */
 
 // 预览后项目文件变化（P0-3 STALE total 比对失败）——client 自动重新预览
-export const RECALL_STALE = 'STALE'
+export const RECALL_STALE = 'STALE' as const
 // 目标消息没有可用项目快照（未捕获/已删除）
-export const RECALL_NO_SNAPSHOT = 'NO_SNAPSHOT'
+export const RECALL_NO_SNAPSHOT = 'NO_SNAPSHOT' as const
 // 快照存储不可用（store 未建/已失配）
-export const RECALL_NO_STORE = 'NO_STORE'
+export const RECALL_NO_STORE = 'NO_STORE' as const
 // 目标工作区 agent 运行中（P0-1 保护，preview/execute 双处拒绝）
-export const RECALL_AGENT_BUSY = 'AGENT_BUSY'
+export const RECALL_AGENT_BUSY = 'AGENT_BUSY' as const
 // 回退失败（H1）——可能已自动救援恢复；message 携带救援结果
-export const RECALL_ROLLBACK_FAILED = 'ROLLBACK_FAILED'
+export const RECALL_ROLLBACK_FAILED = 'ROLLBACK_FAILED' as const
 // 排除配置写入路径不在已知白名单内（防「借 API 写任意文件」）
-export const RECALL_UNKNOWN_PATH = 'UNKNOWN_PATH'
+export const RECALL_UNKNOWN_PATH = 'UNKNOWN_PATH' as const
 // 配置字段类型/取值非法
-export const RECALL_BAD_TYPE = 'BAD_TYPE'
+export const RECALL_BAD_TYPE = 'BAD_TYPE' as const
 // 配置补丁为空（无可写字段）
-export const RECALL_EMPTY_PATCH = 'EMPTY_PATCH'
+export const RECALL_EMPTY_PATCH = 'EMPTY_PATCH' as const
 // settings 服务未组装（非 web 部署 / 未挂载）
-export const RECALL_SETTINGS_UNAVAILABLE = 'SETTINGS_UNAVAILABLE'
+export const RECALL_SETTINGS_UNAVAILABLE = 'SETTINGS_UNAVAILABLE' as const
 // settings.update 写入被拒
-export const RECALL_SETTINGS_WRITE_FAILED = 'SETTINGS_WRITE_FAILED'
+export const RECALL_SETTINGS_WRITE_FAILED = 'SETTINGS_WRITE_FAILED' as const
 // 请求体超过 1MB 上限（errBody 统一映射）
-export const RECALL_BODY_TOO_LARGE = 'BODY_TOO_LARGE'
+export const RECALL_BODY_TOO_LARGE = 'BODY_TOO_LARGE' as const
 // 系统异常/未分类错误兜底（errBody 统一映射）
-export const RECALL_ERROR = 'ERROR'
+export const RECALL_ERROR = 'ERROR' as const
 // 无法解析当前工作区（manage usage/delete）
-export const RECALL_NO_ROOT = 'NO_ROOT'
+export const RECALL_NO_ROOT = 'NO_ROOT' as const
 // 缺少会话 ID（manage delete scope=session）
-export const RECALL_NO_SESSION = 'NO_SESSION'
+export const RECALL_NO_SESSION = 'NO_SESSION' as const
 // 管理操作部分完成（deleteAll 有 store 失败）
-export const RECALL_PARTIAL_DELETE = 'PARTIAL_DELETE'
+export const RECALL_PARTIAL_DELETE = 'PARTIAL_DELETE' as const
 // 未知管理操作（manage 端点 op 未识别）
-export const RECALL_UNKNOWN_OP = 'UNKNOWN_OP'
+export const RECALL_UNKNOWN_OP = 'UNKNOWN_OP' as const
 // 未知 API 端点（webServer 路由 404）
-export const RECALL_UNKNOWN_ENDPOINT = 'UNKNOWN_ENDPOINT'
+export const RECALL_UNKNOWN_ENDPOINT = 'UNKNOWN_ENDPOINT' as const
 
 // 语义锚点：H2 的索引损坏经 status 端点 errors 通道暴露（recordError 文本
 // 前缀 'recall index corrupt'），不作为端点 code 返回。保留单一命名供
 // 一致性扫描与未来若要升级为端点 code 时复用，避免「损坏」这一事实在
 // 代码里无归属。
-export const RECALL_INDEX_CORRUPT = 'INDEX_CORRUPT'
+export const RECALL_INDEX_CORRUPT = 'INDEX_CORRUPT' as const
 
 // 全量常量集合：供单测做「端点返回的 code 都在表内」的一致性扫描
 export const ALL_CODES = Object.freeze([

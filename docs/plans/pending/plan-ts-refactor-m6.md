@@ -56,3 +56,59 @@ M1 临时 `// @ts-nocheck` 清单（host 侧剩余文件）随各自文件迁移
 | 六文件同阶段回归面偏大 | 按建议顺序小步提交（每文件一 commit），任一文件出问题单独 revert |
 
 回退：按文件粒度 revert；tsconfig strict 开关本身单独 commit 便于回退。
+
+## 实施记录
+
+> 2026-09-01 实施完成。基线 HEAD `ea65fed`（M5 收口）。六文件 `git mv` 后整体类型化 + strict 全量开启 + tests/types 补两个契约断言；host 侧 M1 豁免清零（store.ts 的 ts-nocheck 随迁移移除）。
+
+### Commit 边界（M6 两个独立 commit）
+
+| commit | 内容 |
+| --- | --- |
+| M6-1 | 六文件 .ts 化（store/snapshots/maintenance/routes-core/routes-manage/index）+ types/ 接入修正 + tsconfig strict 全量 + tests/types 两个契约断言 + 6 个 host 产物 diff |
+| M6-2 | lib/client.js esbuild 重建一次性 diff（当前 esbuild 输出 vs 存量产物：`"use strict"` 前缀 + TDZ 作用域处理的 dismiss 重命名；src/client 未动，与 M6 无关的确定性重建，M7 预期 client 产物 diff 提前发生） |
+
+### 逐文件落地
+
+| 文件 | 类型化要点 |
+| --- | --- |
+| store.ts | Runtime 接口定稿（state.ts）；模块级纯逻辑（selectPosixHomeBase/resolvePosixHomeBase/parseCleanupResult/isTmpConsumedError）标注；平台专属成员断言 `(scripts as PwshScripts).homeDirScript` / `(scripts as PosixScripts).probeHomeScript`（豁免集结构化收口）；checkScriptParity 的 Object.keys 断言回 Record 读取 |
+| snapshots.ts | 纯逻辑 9 函数 + 工厂全部标注；`DiffResult`/`RollbackResult`（判别联合）/`RescueDeps`/`RescueOpts`/`SnapshotsApi` 接口；SnapshotFeedback 联合读取侧靠 payloads.ts 互补 `?: undefined` 字段（见下） |
+| maintenance.ts | selectOverLimitVictims/selectExpiredVictims + MaintenanceApi；Map 守卫后非空断言 |
+| routes-core.ts | RoutesCoreDeps 接口；六端点 args/响应接 types/api.ts；execute 内 enqueue 回调显式返回联合（`{ok:true,count} | ErrBody`）；errBody 断言读取 message |
+| routes-manage.ts | RoutesManageDeps 接口（list/exclude/usage cache holder 精确类型）；manage 端点 args 接 ManageArgs、响应 ManageResponse；settings ctx.get<SettingsService> 断言；deleteSnapshotsByFilter 的 match 谓词类型 |
+| index.ts | apply(ctx: HostContext, config: ResolvedConfig)；enqueue<T> 泛型（state.queue 链尾哨兵断言回 Promise<void>）；readJsonBody/sendJson 接 HttpRequest/HttpResponse；agentBusy/listExcludeFiles/collectCwds/dumpStores/locateSnapshotOnDisk/collectAllSnapshotRecords 标注 |
+
+### types/ 接入修正（M6 期间随接入调整）
+
+- `payloads.ts`：SnapshotFeedback 联合成员补互补 `?: undefined` 字段（saveIndex/loadIndex/setFeedback 的 `fb.failed`/`fb.skipped` 跨成员读取在 strict 下需要显式 undefined 建模；运行时形状与互斥不变）
+- `scripts.ts`：ScriptStore 改为全必填（storeFromDir/makeStore 恒全量具备，宽松可选反而掩盖漂移）
+- `api.ts`：ErrorCode 改引 errors.ts 派生（M4 as const 补全）；InitResponse.config 可选（unsupported 分支缺省）；新增 ManageDeleteAllPartial（deleteAll 部分完成的 deleted 随错误体回传）
+- `dsh-contract.ts`：新增 HttpRequest/HttpResponse（webServer 前缀路由实际消费面）；SettingsService 补 describe/update/replace/writable
+- `state.ts`：Runtime 定稿 + EnsureGitResult + cutSeqCache 值含 null
+
+### strict 关键处置（每处均行为等价，diff 红线复核通过）
+
+- `gitExe: string | null` → 脚本调用处 `|| ''`（psq(null) 与 psq('') 同为空串，运行语义不变）
+- store 可空路径：`state.stores.get(root) || null` + 守卫 continue（原 JS 已是守卫语义）
+- errBody/rescueError/error.message 读取：`as { message?: string } | null | undefined` 断言（未命中保持 String(error) 原文）
+- `resolvePosixHomeBase` 参数解构外提（deps/inputs 两参显式化，行为等价）
+- `liveMessageTextFast(sessionId || '', id)` 等调用点补 `|| ''`（sessionId 为 null 时原 JS 里 String 化亦为空，行为等价）
+
+### 验收证据
+
+| 验收项 | 结果 |
+| --- | --- |
+| `npm run typecheck`（strict 全量） | 绿：exit 0（113 处 strict 报错全部显式建模清零，`@ts-ignore` 零新增） |
+| `npm test` | 绿：25 文件 290 例（captureSnapshot 两失败入口测试在 store 断言收口后恢复通过） |
+| `npm run verify:host` | 绿：装配断言全部通过（消费 lib/index.js 产物） |
+| `npm run test:probe` | 绿：2 文件 31 例 |
+| host 侧 ts-nocheck 清零 | `grep "@ts-nocheck" src/` 为零（M1 的 store.ts 豁免随迁移移除）；`@ts-ignore` 零 |
+| lib/ 产物 | M6-1 后 host 6 产物 diff 为类型收口对应形态（行为等价逐条核对）；M6-2 client.js 重建 diff 单独 commit |
+| tests/types | 新增 parse-contracts.test.ts（IndexEntry/LineageEntry 与 StoreDumpInfo 双向互赋值）+ api-contracts.test.ts（rescueRollback 返回落 ErrBody、ErrorCode 对偶） |
+
+### 偏离与备注
+
+- M5 期间 types/scripts.ts 的 ScriptStore 曾改必填，但 scripts 内部辅助函数（oversizeBlock/excludeSyncBlock/collectListsBlock 等）的返回类型标注在 M5 提交时未完全持久化，M6 strict 下补齐为 `string`/`string[]` 精确形态（模板体零改动，仅函数签名行）。
+- 临时批量补丁脚本（_tmp-m6-patch-*.mjs）执行后已全部删除，git diff 复核兜底。
+- M6-2 的 client.js 差异与 M6 host 迁移无因果关系：`src/client` 未动，纯 esbuild 重建输出（存量产物与当前 esbuild 的一次性迁移成本），确定性已验证（连续两次 build hash 一致）。

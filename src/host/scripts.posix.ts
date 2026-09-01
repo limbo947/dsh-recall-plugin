@@ -81,7 +81,7 @@ function dropGitlinksBlock() {
 // 批次（规避 ARG_MAX）等价 win32 侧显式 100 条/批；-0 保证路径不分裂；
 // xargs 失败/空输入 || true 兜住（fail-open 语义与逐条版一致，残留条目
 // 不进 index 的代价由下次快照幂等重试）。
-function oversizeBlock(maxBytes) {
+function oversizeBlock(maxBytes: number): string {
   return [
     'find "$root" -type f -size +' + String(maxBytes || MAX_FILE_BYTES) + 'c -print0 2>/dev/null | while IFS= read -r -d \'\' f; do',
     '  printf \'%s\\0\' "${f#"$root"/}"',
@@ -104,7 +104,7 @@ function oversizeBlock(maxBytes) {
 //   本就是为规避 ARG_MAX 设计（等价 win32 侧显式 100 条/批的分块纪律），
 //   -0 保证空格/中文路径不分裂；空输入时 GNU xargs 空跑一次 update-index
 //   （usage 退出，2>/dev/null + || true 兜住，BSD xargs 空输入不执行）。
-function excludeSyncBlock(excludeFile, base) {
+function excludeSyncBlock(excludeFile: string, base: string[]): string {
   // 兜底含两种存储目录名：降级为 .dsh-recall-snapshots/，home 存储为
   // dsh-recall-snapshots/（root=HOME 时落入工作区，漏排除会自吞，issue #6）
   const baseList = Array.isArray(base) && base.length ? base : ['.git', 'node_modules/', '.dsh-recall-snapshots/', 'dsh-recall-snapshots/']
@@ -296,7 +296,7 @@ export function snapshotScript(root: string, store: ScriptStore, gitExe: string,
 // 行格式：cur 为「mode sha stage<TAB>path」（取 sha=a[2]），target 为
 // 「mode type sha<TAB>path」（取 sha=a[3]）；grep 滤掉 gitlink（160000）行，
 // 无匹配时退出码 1，set -e 下统一 || true。
-function collectListsBlock(store, gitExe, root, tag, base) {
+function collectListsBlock(store: ScriptStore, gitExe: string, root: string, tag: string, base: string[]): string {
   return [
     'git=' + psq(gitExe),
     'g=' + psq(store.git),

@@ -8,15 +8,33 @@
  */
 
 import { ENV_HINTS } from './diagnostics.js'
-import { parseTreeId } from './snapshots.js'
+import { parseTreeId, rescueRollback } from './snapshots.js'
+import type { Runtime, SharedState, ErrorRecord, StoreInfo } from '../types/state.js'
+import type { ResolvedConfig } from '../types/config.js'
+import type { SnapshotsApi } from './snapshots.js'
+import type { EnvErrorKind } from './diagnostics.js'
+import type { InitArgs, InitResponse, SnapshotInfoArgs, SnapshotInfoResponse, PreviewArgs, PreviewResponse, ExecuteArgs, ExecuteResponse, StatusArgs, StatusResponse, LineageRecordArgs, LineageRecordResponse, ErrBody } from '../types/api.js'
 
-export function createRoutesCore(deps) {
+// 端点依赖注入面（index.ts 装配时逐项提供；ctx 不解构的 A4 纪律见工厂注释）
+export interface RoutesCoreDeps {
+  rt: Runtime
+  snaps: SnapshotsApi
+  state: SharedState
+  cfg: ResolvedConfig
+  supported: boolean
+  enqueue<T>(task: () => Promise<T>): Promise<T>
+  agentBusy(sessionId: string | null, root: string | null): boolean
+  rescueRollback: typeof rescueRollback
+  E: typeof import('./errors.js')
+}
+
+export function createRoutesCore(deps: RoutesCoreDeps) {
   // ctx 不解构（A4）：本域所有服务访问都已由 rt/snaps 封装，直接摸 ctx 会
   // 绕过工厂分层——留空位只会诱导未来代码破坏依赖注入约定
   const { rt, snaps, state, cfg, supported, enqueue, agentBusy, rescueRollback, E } = deps
 
   return {
-    'init': async (args) => {
+    'init': async (args: InitArgs): Promise<InitResponse> => {
       if (!supported) {
         return { ok: false, root: null, notice: { unsupported: true } }
       }
@@ -24,9 +42,9 @@ export function createRoutesCore(deps) {
       const root = await rt.resolveRoot(sessionId)
       let notice = null
       if (root) {
-        let store = await rt.resolveStore(root)
+        let store: StoreInfo | null = await rt.resolveStore(root)
         store = await rt.tryUpgradeToHome(root)
-        await rt.ensureGit(root, store)
+        if (store) await rt.ensureGit(root, store)
         await snaps.loadIndex(root, sessionId)
         await snaps.rebuildOrphans(root, sessionId)
         rt.cleanupLegacy(root)
@@ -43,17 +61,17 @@ export function createRoutesCore(deps) {
       return { ok: Boolean(root), root: root || null, notice, config: { refillDraft: cfg.refillDraft, archiveOriginal: cfg.archiveOriginal } }
     },
 
-    'snapshot-info': async (args) => {
+    'snapshot-info': async (args: SnapshotInfoArgs): Promise<SnapshotInfoResponse> => {
       const id = args && args.messageId ? String(args.messageId) : ''
       const snap = state.snapshots.get(id)
       // 失败/跳过/熔断反馈（issue #7 失败可见性）：客户端轮询到 failed 即
       // 终止轮询并 toast，不再空等 20 次；has 时附带 skipped 让用户知道
       // fail-open 跳过了哪些路径
-      const feedback = await snaps.feedbackFor(args && args.sessionId, id)
+      const feedback = await snaps.feedbackFor(args ? args.sessionId : null, id)
       return { has: Boolean(snap), time: snap ? snap.time : null, id, ...feedback }
     },
 
-    'preview': async (args) => {
+    'preview': async (args: PreviewArgs): Promise<PreviewResponse> => {
       const id = args && args.messageId ? String(args.messageId) : ''
       const sessionId = args && args.sessionId ? String(args.sessionId) : null
       // P0-1：目标工作区 agent 运行中直接拒绝预览（避免用户确认时文件被
@@ -72,10 +90,10 @@ export function createRoutesCore(deps) {
       return { ok: true, changes: result.changes, total: result.total, truncated: result.truncated, treeId: result.treeId || null, time: snap2 ? snap2.time : null, root: snap2 ? snap2.root : null, cutSeq }
     },
 
-    'execute': async (args) => {
+    'execute': async (args: ExecuteArgs): Promise<ExecuteResponse> => {
       const id = args && args.messageId ? String(args.messageId) : ''
       const sessionId = args && args.sessionId ? String(args.sessionId) : null
-      const result = await enqueue(async () => {
+      const result = await enqueue(async (): Promise<{ ok: true; count: number } | ErrBody> => {
         const snap = state.snapshots.get(id)
         if (!snap) return { ok: false, code: E.RECALL_NO_SNAPSHOT, message: '该消息没有可用的项目快照' }
         const store = state.stores.get(snap.root)
@@ -112,7 +130,7 @@ export function createRoutesCore(deps) {
         let safetyOk = false
         let safetyTreeId = null
         try {
-          const out = await rt.runShell(rt.scripts.snapshotScript(snap.root, store, state.gitExe, safetyId, cfg.baseExcludes), { timeoutMs: 600000, stdoutMaxBytes: 65536 })
+          const out = await rt.runShell(rt.scripts.snapshotScript(snap.root, store, state.gitExe || '', safetyId, cfg.baseExcludes), { timeoutMs: 600000, stdoutMaxBytes: 65536 })
           safetyOk = true
           safetyTreeId = parseTreeId(out)
         } catch (error) {
@@ -128,7 +146,7 @@ export function createRoutesCore(deps) {
         // 救援（H1）。rescueRollback 是 snapshots.js 模块级纯逻辑，副作用经
         // deps 注入，三分支（无救援点/救援成功/救援失败）单测直接钉。
         return rescueRollback(
-          { runShell: rt.runShell, scripts: rt.scripts, gitExe: state.gitExe, recordError: rt.recordError },
+          { runShell: rt.runShell, scripts: rt.scripts, gitExe: state.gitExe || '', recordError: rt.recordError },
           { root: snap.root, store, safetyId, safetyOk, rollbackError: rolled.error }
         )
       })
@@ -144,16 +162,16 @@ export function createRoutesCore(deps) {
     // Client 改动；hint 是分类后的可行动提示（API 自描述，本次无客户端
     // 消费，设置页未来展示零成本）。storeBase（M2-D3）暴露快照存储根，
     // 供设置页未来展示「快照存在哪里」，失败为 null。
-    'status': async (args) => {
+    'status': async (args: StatusArgs): Promise<StatusResponse> => {
       const storeBase = await rt.resolveHomeContainer()
       if (args && args.op === 'clear') {
         state.errors.length = 0
         return { ok: true, errors: [], storeBase }
       }
-      const errors = state.errors.slice(-20).reverse().map((e) => ({
+      const errors = state.errors.slice(-20).reverse().map((e: ErrorRecord) => ({
         ...e,
         message: e.message + (e.count > 1 ? '（×' + e.count + '）' : ''),
-        hint: ENV_HINTS[e.kind] || null
+        hint: e.kind ? ENV_HINTS[e.kind] : null
       }))
       return { ok: true, errors, storeBase }
     },
@@ -162,13 +180,13 @@ export function createRoutesCore(deps) {
     // lineage.json 供快照管理树聚族展示「版本家族」。root 优先按 fork 源
     // parentId 解析（fork 时它仍是 live 会话；归档只隐藏列表、对象在内存），
     // 失败回退 childId。
-    'lineage-record': async (args) => {
+    'lineage-record': async (args: LineageRecordArgs): Promise<LineageRecordResponse> => {
       const childId = args && args.childId ? String(args.childId) : ''
       const parentId = args && args.parentId ? String(args.parentId) : ''
       if (!childId || !parentId) return { ok: false, code: E.RECALL_BAD_TYPE, message: '缺少会话 ID' }
       const root = (await rt.resolveRoot(parentId)) || (await rt.resolveRoot(childId))
       if (!root) return { ok: false, code: E.RECALL_NO_ROOT, message: '无法解析工作区' }
-      let store = state.stores.get(root)
+      let store: StoreInfo | null = state.stores.get(root) || null
       if (!store) {
         try { store = await rt.resolveStore(root) } catch (error) { store = null }
       }

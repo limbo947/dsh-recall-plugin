@@ -7,27 +7,9 @@
 
 import type { FeedbackKind, LineageEntry } from './payloads.js'
 import type { ResolvedConfig } from './config.js'
+import type { ErrorCode } from '../host/errors.js'
 
-// 端点错误码（M4 errors.ts as const 后改引用）
-export type ErrorCode =
-  | 'STALE'
-  | 'NO_SNAPSHOT'
-  | 'NO_STORE'
-  | 'AGENT_BUSY'
-  | 'ROLLBACK_FAILED'
-  | 'UNKNOWN_PATH'
-  | 'BAD_TYPE'
-  | 'EMPTY_PATCH'
-  | 'SETTINGS_UNAVAILABLE'
-  | 'SETTINGS_WRITE_FAILED'
-  | 'BODY_TOO_LARGE'
-  | 'ERROR'
-  | 'NO_ROOT'
-  | 'NO_SESSION'
-  | 'PARTIAL_DELETE'
-  | 'UNKNOWN_OP'
-  | 'UNKNOWN_ENDPOINT'
-  | 'INDEX_CORRUPT'
+export type { ErrorCode }
 
 // 统一错误体（errBody 构造 + 各端点业务失败分支共用形状）
 export interface ErrBody {
@@ -50,7 +32,8 @@ export interface InitResponse {
   ok: boolean
   root: string | null
   notice: InitNotice | null
-  config: { refillDraft: boolean; archiveOriginal: boolean }
+  // 仅受支持平台且有 root 时下发（unsupported 分支缺省）；client 读侧可选
+  config?: { refillDraft: boolean; archiveOriginal: boolean }
 }
 
 // ---- snapshot-info ----
@@ -220,6 +203,13 @@ export interface ManageDeleteOk {
   deleted?: number
   stores?: number
 }
+// deleteAll 部分完成（有 store 失败）：deleted 随错误体一并回传
+export interface ManageDeleteAllPartial {
+  ok: false
+  code: ErrorCode
+  deleted: number
+  message: string
+}
 export interface ManageGcOk {
   ok: true
   gc: boolean
@@ -234,6 +224,7 @@ export type ManageResponse =
   | ManageMessagesOk
   | ManageUsageOk
   | ManageDeleteOk
+  | ManageDeleteAllPartial
   | ManageGcOk
   | ManageLineageOk
   | ErrBody

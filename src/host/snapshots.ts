@@ -9,14 +9,20 @@
 
 import * as E from './errors.js'
 import { buildFeedbackError } from './diagnostics.js'
+import type { Runtime, StoreInfo } from '../types/state.js'
+import type { SnapshotFeedback, LineageEntry, IndexEntry } from '../types/payloads.js'
+import type { HostContext, SessionEvent, SessionQueryEngine } from '../types/dsh-contract.js'
+import type { ResolvedConfig } from '../types/config.js'
+import type { ErrorCode, DiffChange } from '../types/api.js'
+import type { PwshScripts, PosixScripts } from '../types/scripts.js'
 
 // ---- 纯逻辑（模块级导出，供 tests/unit 直接钉住；工厂内沿用同一实现）----
 
 // 脚本侧 fail-open 跳过的路径（--ignore-errors 下无法索引的目录，如无
 // 提交的嵌入式仓库）以「SNAP_SKIP <path>」行回传：这些路径不进快照，
 // 撤回时既不恢复也不会被删，用户应当知道快照少了什么。
-export function parseSkipped(out) {
-  const skipped = []
+export function parseSkipped(out: unknown): string[] {
+  const skipped: string[] = []
   for (const line of String(out || '').split(/\r?\n/)) {
     if (line.indexOf('SNAP_SKIP ') === 0) skipped.push(line.slice('SNAP_SKIP '.length))
   }
@@ -25,14 +31,14 @@ export function parseSkipped(out) {
 
 // POSIX 侧 diff 输出是 TSV「kind<TAB>path」逐行（bash 模板不拼 JSON，
 // 避免 jq 依赖与转义坑）；win32 侧是 ConvertTo-Json。这里按平台分叉解析。
-export function parseChanges(text, isWin) {
+export function parseChanges(text: string, isWin: boolean): DiffChange[] {
   if (isWin) {
     const parsed = JSON.parse(text)
     if (Array.isArray(parsed)) return parsed
     if (parsed && typeof parsed === 'object') return [parsed]
     return []
   }
-  const out = []
+  const out: DiffChange[] = []
   for (const line of text.split(/\r?\n/)) {
     if (!line) continue
     const tab = line.indexOf('\t')
@@ -45,7 +51,7 @@ export function parseChanges(text, isWin) {
 // PF-1：snapshotScript 输出中的 TREE 行（add -A 后的 index 树指纹）。
 // execute 拿安全快照输出的指纹与 preview 指纹比对判 STALE；无该行的旧输出
 // （脚本/Host 版本错位的理论场景）返回 null，调用侧跳过指纹校验。
-export function parseTreeId(out) {
+export function parseTreeId(out: unknown): string | null {
   for (const line of String(out || '').split(/\r?\n/)) {
     if (line.indexOf('TREE ') === 0) return line.slice(5).trim() || null
   }
@@ -58,11 +64,17 @@ export function parseTreeId(out) {
 // parseChanges——win32 分支对整段文本 JSON.parse，标记行混入直接抛错。
 // total 语义不变（全量条数）：win32 由 TOTAL 行回传（截断前移脚本侧），
 // POSIX 无 TOTAL 行则取解析条数（不截断）。treeId 为 index 树指纹。
-export function parseDiffOutput(text, isWin, maxChanges) {
+export interface DiffResult {
+  changes: DiffChange[]
+  total: number
+  truncated: boolean
+  treeId: string | null
+}
+export function parseDiffOutput(text: string, isWin: boolean, maxChanges: number): DiffResult {
   const lines = String(text || '').split(/\r?\n/)
-  let total = null
-  let treeId = null
-  const body = []
+  let total: number | null = null
+  let treeId: string | null = null
+  const body: string[] = []
   for (const line of lines) {
     if (line.indexOf('TREE ') === 0) { treeId = line.slice(5).trim() || null; continue }
     if (line.indexOf('TOTAL ') === 0) {
@@ -80,7 +92,7 @@ export function parseDiffOutput(text, isWin, maxChanges) {
 }
 
 // 在事件序列里找“该消息之前最近一次 turn/end 的 seq”。
-export function scanCutSeq(events, messageId) {
+export function scanCutSeq(events: SessionEvent[], messageId: string): number | null {
   let anchor = -1
   for (let i = 0; i < events.length; i++) {
     const e = events[i]
@@ -106,7 +118,20 @@ export function scanCutSeq(events, messageId) {
 // rollback 实际未动工作区，reset 到安全快照也只是把工作区恢复成回退前
 // （≈当前）状态。无安全快照（safety 快照当时失败）时退化为现状 fail-loud，
 // 不静默。
-export async function rescueRollback(deps, opts) {
+export interface RescueDeps {
+  runShell(cmd: string, opts?: { timeoutMs?: number; stdoutMaxBytes?: number }): Promise<string>
+  scripts: PwshScripts | PosixScripts
+  gitExe: string
+  recordError(text: string): void
+}
+export interface RescueOpts {
+  root: string
+  store: StoreInfo
+  safetyId: string
+  safetyOk: boolean
+  rollbackError?: string
+}
+export async function rescueRollback(deps: RescueDeps, opts: RescueOpts): Promise<{ ok: false; code: ErrorCode; message: string }> {
   const { root, store, safetyId, safetyOk, rollbackError } = opts
   const reason = String(rollbackError || '未知原因')
   if (!safetyOk) {
@@ -127,7 +152,9 @@ export async function rescueRollback(deps, opts) {
     deps.recordError('recall rollback failed, rescued to safety tag: ' + tag + ' — ' + reason)
     return { ok: false, code: E.RECALL_ROLLBACK_FAILED, message: '回退失败：' + reason + '；已自动恢复到回退前的安全快照，请重新预览后重试' }
   } catch (rescueError) {
-    const rescueReason = String(rescueError && rescueError.message ? rescueError.message : rescueError)
+    // rescueError 是 catch 的 unknown，message 字段按 Error 形状断言读取
+    const re = rescueError as { message?: string } | null | undefined
+    const rescueReason = String(re && re.message ? re.message : rescueError)
     deps.recordError('recall rollback failed and rescue failed: ' + tag + ' — ' + reason + ' | rescue: ' + rescueReason)
     return { ok: false, code: E.RECALL_ROLLBACK_FAILED, message: '回退失败：' + reason + '；自动恢复也失败，请手动执行：' + manual }
   }
@@ -137,7 +164,7 @@ export async function rescueRollback(deps, opts) {
 // 共用同一谓词）。安全 tag 是回退前自动打下的救援锚点（pre-rollback-<ts>，
 // 见 routes-core.js execute），不是消息快照——不进索引、不在列表展示。
 // 消息 ID 为系统生成 GUID，前缀碰撞概率为零（plan-competitor-fixes F-G1 风险节）。
-export function isSafetySnapshotId(id) {
+export function isSafetySnapshotId(id: unknown): boolean {
   return typeof id === 'string' && id.indexOf('pre-rollback-') === 0
 }
 
@@ -145,8 +172,8 @@ export function isSafetySnapshotId(id) {
 // 「<tag名> <秒级时间戳>」，for-each-ref 的 refname 不含空格、时间戳
 // 恒为行尾整数。时间解析失败/缺省回退 null——调用方以 0 兜底（保留
 // 旧「无时间」行为），绝不因格式漂移丢 tag。
-export function parseTagsWithTime(text) {
-  const out = []
+export function parseTagsWithTime(text: unknown): Array<{ name: string; time: number | null }> {
+  const out: Array<{ name: string; time: number | null }> = []
   for (const line of String(text || '').split(/\r?\n/)) {
     const t = line.trim()
     if (!t) continue
@@ -160,7 +187,27 @@ export function parseTagsWithTime(text) {
 
 // ---- 配置工厂 ----
 
-export function createSnapshots(ctx, rt, config) {
+export interface SnapshotsApi {
+  saveIndex(root: string, sessionId: string | null): Promise<void>
+  loadIndex(root: string, sessionId: string | null): Promise<void>
+  readExclude(store: StoreInfo): Promise<string>
+  writeExclude(store: StoreInfo, text: string): Promise<void>
+  rebuildOrphans(root: string, sessionId: string | null): Promise<void>
+  captureSnapshot(sessionId: string, messageId: string, time?: number): Promise<void>
+  diffFor(messageId: string): Promise<DiffResult | null>
+  rollbackFor(messageId: string): Promise<RollbackResult>
+  resolveCutSeq(sessionId: string | null, messageId: string | null): Promise<number | null>
+  feedbackFor(sessionId: string | null | undefined, messageId: string): Promise<SnapshotFeedback | {}>
+  loadLineage(root: string): Promise<LineageEntry[]>
+  recordLineage(root: string, childId: string, parentId: string): Promise<void>
+}
+
+// 回退结果判别联合：成功恒带 count；失败带 error（可能半回退 partial）
+export type RollbackResult =
+  | { ok: true; count: number }
+  | { ok: false; error: string; partial?: boolean }
+
+export function createSnapshots(ctx: HostContext, rt: Runtime, config: ResolvedConfig): SnapshotsApi {
   const sessions = ctx.sessions
   const state = rt.state
   // 平台选择的脚本模板（rt.scripts = scripts.pwsh.js / scripts.posix.js）：
@@ -169,7 +216,7 @@ export function createSnapshots(ctx, rt, config) {
   // 基础排除表随调用透传给脚本模板（用户 config 可调，即时生效）
   // 运行时读取而非创建时快照：设置卡片热更新 baseExcludes 后，
   // 下一次快照/diff/回退立即按新排除表执行
-  const BASE = () => config.baseExcludes
+  const BASE = (): string[] => config.baseExcludes
 
   // 连续失败熔断（issue #7）：失败快照的重试既无谓地全量扫描工作区，
   // 又持续写入无 tag 可达的残骸对象（实测一个下午 127GB）。连续
@@ -185,7 +232,7 @@ export function createSnapshots(ctx, rt, config) {
   // 索引落盘：任意长度文本统一走 rt.writeTextViaShell（win32 base64
   // 分块 / POSIX stdin，实现见 store.js）——saveIndex 与 writeExclude
   // 曾逐字重复这套平台分叉，改一处漏一处的风险随合并消失。
-  async function saveIndex(root, sessionId) {
+  async function saveIndex(root: string, sessionId: string | null): Promise<void> {
     const store = state.stores.get(root)
     if (!store) return
     // 每条带 root：设置页「快照管理」要跨工作区展示列表，而 store 目录名
@@ -196,10 +243,10 @@ export function createSnapshots(ctx, rt, config) {
     // 有跳过），正常快照不带——省空间；重启后 snapshot-info 仍能解释
     // 「这条消息为什么没有/缺了快照」。与 root 字段当年的兼容策略一致：
     // 老版本插件读新索引忽略未知字段。
-    const entries = Array.from(state.snapshots.entries())
+    const entries: IndexEntry[] = Array.from(state.snapshots.entries())
       .filter(([, s]) => s.root === root)
       .map(([id, s]) => {
-        const rec = { id, time: s.time, root: s.root, sessionId: s.sessionId }
+        const rec: IndexEntry = { id, time: s.time, root: s.root, sessionId: s.sessionId }
         const fb = state.snapFeedback.get(id)
         if (fb && (fb.failed || (Array.isArray(fb.skipped) && fb.skipped.length))) rec.feedback = fb
         return rec
@@ -211,7 +258,7 @@ export function createSnapshots(ctx, rt, config) {
     }
   }
 
-  async function loadIndex(root, sessionId) {
+  async function loadIndex(root: string, sessionId: string | null): Promise<void> {
     if (state.indexLoaded.has(root)) return
     const store = state.stores.get(root)
     if (!store) return
@@ -246,7 +293,7 @@ export function createSnapshots(ctx, rt, config) {
       return
     }
     if (!raw) { state.indexLoaded.add(root); return }
-    let entries = null
+    let entries: IndexEntry[] | null = null
     try {
       entries = JSON.parse(raw)
     } catch (error) {
@@ -270,7 +317,7 @@ export function createSnapshots(ctx, rt, config) {
       state.snapshots.set(entry.id, {
         root,
         time: typeof entry.time === 'number' ? entry.time : Date.now(),
-        sessionId: entry.sessionId || sessionId
+        sessionId: entry.sessionId || sessionId || ''
       })
       // feedback 回填（P1-2）：重启后仍能解释「这条消息为什么没有/缺了
       // 快照」。复用 setFeedback 落内存（保持 FIFO 上限），只回填「需要
@@ -279,14 +326,17 @@ export function createSnapshots(ctx, rt, config) {
       // 漏 kind 会让重启后的失败条目丢失分类、status hint 失效。
       const fb = entry.feedback
       if (fb && typeof fb === 'object') {
-        const rec = {}
+        // 重建 feedback 记录：字段白名单逐项回填（failed 分支与 skipped 分支
+        // 互斥），rec 以宽松形状声明，落 setFeedback 时由守卫保证形状落入
+        // SnapshotFeedback 联合（至少含 failed 或非空 skipped，不会空对象）
+        const rec: { failed?: boolean; error?: string; kind?: string; skipped?: string[] } = {}
         if (fb.failed) {
           rec.failed = true
           if (typeof fb.error === 'string') rec.error = fb.error
           if (typeof fb.kind === 'string') rec.kind = fb.kind
         }
         if (Array.isArray(fb.skipped)) rec.skipped = fb.skipped.filter((p) => typeof p === 'string')
-        if (rec.failed || (Array.isArray(rec.skipped) && rec.skipped.length)) setFeedback(entry.id, rec)
+        if (rec.failed || (Array.isArray(rec.skipped) && rec.skipped.length)) setFeedback(entry.id, rec as SnapshotFeedback)
       }
     }
     if (invalid > 0) rt.recordError('recall index has ' + invalid + ' invalid entries for: ' + root)
@@ -304,7 +354,7 @@ export function createSnapshots(ctx, rt, config) {
   // 故障（权限/磁盘）会把最近错误环（20 条）瞬间刷满；节流保留告警存在性
   // 同时防刷屏。Map 挂工厂闭包而非模块级（HMR 假设）。
   const quarantineThrottle = new Map()
-  function quarantineErrorThrottled(store, text) {
+  function quarantineErrorThrottled(store: StoreInfo, text: string): void {
     const last = quarantineThrottle.get(store.dir) || 0
     if (Date.now() - last < 5 * 60 * 1000) return
     quarantineThrottle.set(store.dir, Date.now())
@@ -314,7 +364,7 @@ export function createSnapshots(ctx, rt, config) {
   // H2：损坏索引现场保留——改名 index.json.corrupt-<ts> 而非删除，供排障；
   // 改完名原路径即空，下次 loadIndex 读到空按「无索引」处理，不重复告警。
   // 返回是否改名成功：失败时不标记 indexLoaded，下次重试而非让坏文件被跳过。
-  async function quarantineCorruptIndex(store) {
+  async function quarantineCorruptIndex(store: StoreInfo): Promise<boolean> {
     const sep = rt.isWin ? '\\' : '/'
     const corrupt = store.dir + sep + 'index.json.corrupt-' + Date.now()
     try {
@@ -333,7 +383,7 @@ export function createSnapshots(ctx, rt, config) {
   // store 目录的 lineage.json（原子写），快照管理树据此聚族展示「版本家族」。
   // lineage.json 损坏不致命（与 index.json 损坏 fail-loud 语义区分）：按无
   // lineage 处理，快照树退化为现有「工作区 → 会话」分组。
-  async function loadLineage(root) {
+  async function loadLineage(root: string): Promise<LineageEntry[]> {
     const store = state.stores.get(root)
     if (!store) return []
     try {
@@ -348,7 +398,7 @@ export function createSnapshots(ctx, rt, config) {
     }
   }
 
-  async function recordLineage(root, childId, parentId) {
+  async function recordLineage(root: string, childId: string, parentId: string): Promise<void> {
     const store = state.stores.get(root)
     if (!store) return
     const sep = rt.isWin ? '\\' : '/'
@@ -367,14 +417,14 @@ export function createSnapshots(ctx, rt, config) {
   // exclude.txt 原文读取（设置页编辑用）：stripBom 剥掉 PS 5.1 Set-Content
   // 写入的 UTF-8 BOM，避免设置页首行出现不可见的 \uFEFF；两套模板对缺失
   // 文件都输出空串，这里不用区分「没配过」和「配了空」。
-  async function readExclude(store) {
+  async function readExclude(store: StoreInfo): Promise<string> {
     return S.stripBom(await rt.runShell(S.excludeReadCmd(store.excludeFile), { stdoutMaxBytes: 1048576 }))
   }
 
   // exclude.txt 原文写入（设置页保存）：先 mkdir 父目录兜底（home 根目录
   // /降级 store 目录被用户手滑删掉时，保存不该因此失败），写本体统一走
   // rt.writeTextViaShell，与 saveIndex 共用同一套平台分叉原语。
-  async function writeExclude(store, text) {
+  async function writeExclude(store: StoreInfo, text: string): Promise<void> {
     const body = String(text == null ? '' : text)
     const sep = rt.isWin ? '\\' : '/'
     const parent = store.excludeFile.slice(0, store.excludeFile.lastIndexOf(sep))
@@ -391,7 +441,7 @@ export function createSnapshots(ctx, rt, config) {
   //   saveIndex 自然补写（文档语义安全论证）；条目为 0 的 healthy 不跳
   //   （合法「磁盘有 tag、索引为空」态仍需重建）；
   // - empty/quarantined/读失败（都不标 healthy）→ 照跑，自愈链路完整。
-  async function rebuildOrphans(root, sessionId) {
+  async function rebuildOrphans(root: string, sessionId: string): Promise<void> {
     if (state.indexTruncated.has(root)) return
     if (state.indexHealthy.has(root)) {
       let count = 0
@@ -425,15 +475,17 @@ export function createSnapshots(ctx, rt, config) {
     }
   }
 
-  async function captureSnapshot(sessionId, messageId, time) {
+  async function captureSnapshot(sessionId: string, messageId: string, time?: number): Promise<void> {
     const root = await rt.resolveRoot(sessionId)
     if (!root) return
     // 熔断检查要在任何解析/建仓动作之前：冷却期内连 resolveStore 都
     // 不必跑，把失败重试的开销也一并止住
     const fused = snapFailures.get(root)
     if (fused && Date.now() < fused.skipUntil) return
-    let store = await rt.resolveStore(root)
-    store = await rt.tryUpgradeToHome(root)
+    let store: StoreInfo | null = await rt.resolveStore(root)
+    // tryUpgradeToHome 对刚 resolveStore 的 root 恒返回非空（缓存已写入）；
+    // 断言仅为类型收口，运行语义与迁移前一致（原代码直接透传返回值）
+    store = (await rt.tryUpgradeToHome(root))!
     // ensureGit 失败（issue #11 主线缺口）：原先静默 return，不进
     // snapFeedback，客户端空轮询 20 次后放弃、用户零感知。现在走与
     // snapshotScript 失败相同的反馈通道——buildFeedbackError 把原始
@@ -448,7 +500,7 @@ export function createSnapshots(ctx, rt, config) {
     }
     await loadIndex(root, sessionId)
     try {
-      const out = await rt.runShell(S.snapshotScript(root, store, state.gitExe, messageId, BASE()), { timeoutMs: 600000, stdoutMaxBytes: 65536 })
+      const out = await rt.runShell(S.snapshotScript(root, store!, state.gitExe || '', messageId, BASE()), { timeoutMs: 600000, stdoutMaxBytes: 65536 })
       snapFailures.delete(root)
       state.snapshots.set(String(messageId), { root, time: time || Date.now(), sessionId })
       await saveIndex(root, sessionId)
@@ -465,19 +517,19 @@ export function createSnapshots(ctx, rt, config) {
   // 逐消息反馈写入（issue #7 失败可见性）：成功无跳过 → 清除（重试成功
   // 自愈）；失败/有跳过 → 记录。上限防泄漏：交替成功失败的长会话可以无限
   // 积累，Map 保插入序做 FIFO 淘汰。
-  function setFeedback(messageId, rec) {
+  function setFeedback(messageId: string | number, rec: SnapshotFeedback): void {
     const id = String(messageId)
     const keep = rec && ((rec.failed) || (Array.isArray(rec.skipped) && rec.skipped.length))
     if (keep) state.snapFeedback.set(id, rec)
     else state.snapFeedback.delete(id)
-    if (state.snapFeedback.size > 200) state.snapFeedback.delete(state.snapFeedback.keys().next().value)
+    if (state.snapFeedback.size > 200) state.snapFeedback.delete(state.snapFeedback.keys().next().value!)
   }
 
   // snapshot-info 端点的反馈查询：优先逐消息记录；无记录但该 root 熔断中
   // 时反馈熔断状态（冷却期内的消息快照被静默跳过，客户端需要知道「不是
   // 还没好，是暂停了」）。客户端只对近 5 分钟的消息弹提示，历史消息查询
   // 不受影响。
-  async function feedbackFor(sessionId, messageId) {
+  async function feedbackFor(sessionId: string | null | undefined, messageId: string): Promise<SnapshotFeedback | {}> {
     const rec = state.snapFeedback.get(String(messageId || ''))
     if (rec) return rec
     if (!sessionId) return {}
@@ -495,7 +547,7 @@ export function createSnapshots(ctx, rt, config) {
   // （见 index.js 事件接线），这两个动作留在 catch 里顺势排队执行，
   // 与下一次快照天然互斥，无 git 锁竞态；自身整体 best-effort，
   // 清理失败不该让队列任务以异常收场。
-  async function handleSnapshotFailure(root, store) {
+  async function handleSnapshotFailure(root: string, store: StoreInfo | null): Promise<void> {
     if (store && state.gitExe) {
       try {
         await rt.runShell(S.pruneScript(store, state.gitExe), { timeoutMs: 600000, stdoutMaxBytes: 4096 })
@@ -521,27 +573,27 @@ export function createSnapshots(ctx, rt, config) {
   // 汇总展示；total 保留完整计数让面板文案仍准确。
   const MAX_CHANGES = 500
 
-  async function diffFor(messageId) {
+  async function diffFor(messageId: string): Promise<DiffResult | null> {
     const snap = state.snapshots.get(String(messageId))
     if (!snap) return null
     const store = state.stores.get(snap.root)
     if (!store) return null
     // 8MB 上限：按平均每条 60 字节估算可容纳十余万条，正常项目远够；
     // 真超限时报错文案与「JSON 半截解析失败」的真实原因脱节，需显式检测
-    const text = S.stripBom(await rt.runShell(S.diffScript(snap.root, store, state.gitExe, 'snap-' + messageId, BASE(), MAX_CHANGES), { timeoutMs: 600000, stdoutMaxBytes: 8388608 }))
+    const text = S.stripBom(await rt.runShell(S.diffScript(snap.root, store, state.gitExe || '', 'snap-' + messageId, BASE(), MAX_CHANGES), { timeoutMs: 600000, stdoutMaxBytes: 8388608 }))
     const trimmed = text.trim()
     if (!trimmed) return { changes: [], total: 0, truncated: false, treeId: null }
     // PF-1：解析下沉到 parseDiffOutput（标记行剥离 + 截断 + 树指纹），纯函数单测钉住
     return parseDiffOutput(trimmed, rt.isWin, MAX_CHANGES)
   }
 
-  async function rollbackFor(messageId) {
+  async function rollbackFor(messageId: string): Promise<RollbackResult> {
     const snap = state.snapshots.get(String(messageId))
     if (!snap) return { ok: false, error: '该消息没有可用的项目快照' }
     const store = state.stores.get(snap.root)
     if (!store) return { ok: false, error: '快照存储不可用' }
     try {
-      const text = S.stripBom(await rt.runShell(S.rollbackScript(snap.root, store, state.gitExe, 'snap-' + messageId, BASE()), { timeoutMs: 600000, stdoutMaxBytes: 65536 }))
+      const text = S.stripBom(await rt.runShell(S.rollbackScript(snap.root, store, state.gitExe || '', 'snap-' + messageId, BASE()), { timeoutMs: 600000, stdoutMaxBytes: 65536 }))
       const m = text.trim().match(/^ROLLBACK_OK\s+(\d+)\s+(\d+)/)
       if (!m) {
         // 无 ROLLBACK_OK 哨兵：脚本在输出哨兵前终止，工作区状态不可知——
@@ -553,7 +605,8 @@ export function createSnapshots(ctx, rt, config) {
       return { ok: true, count: (Number.isNaN(deleted) ? 0 : deleted) + (Number.isNaN(restored) ? 0 : restored) }
     } catch (error) {
       // runShell 抛错（脚本异常终止）：工作区同样可能半回退，交 execute 救援。
-      const msg = String(error && error.message ? error.message : error)
+      const re = error as { message?: string } | null | undefined
+      const msg = String(re && re.message ? re.message : error)
       return { ok: false, partial: true, error: msg }
     }
   }
@@ -561,16 +614,16 @@ export function createSnapshots(ctx, rt, config) {
   // 解析“整段回退”的会话切点：优先读 live 会话的内存事件（零 IO、毫秒级），
   // 冷会话回退到 sessionQuery.readSession；结果按 (会话, 消息) 缓存——
   // 消息一旦入日志，其之前的 turn/end 永不变化，缓存终身有效。
-  async function resolveCutSeq(sessionId, messageId) {
+  async function resolveCutSeq(sessionId: string | null, messageId: string | null): Promise<number | null> {
     if (!sessionId || !messageId) return null
     const cacheKey = String(sessionId) + '\u0000' + String(messageId)
-    if (state.cutSeqCache.has(cacheKey)) return state.cutSeqCache.get(cacheKey)
-    let result = null
+    if (state.cutSeqCache.has(cacheKey)) return state.cutSeqCache.get(cacheKey) || null
+    let result: number | null = null
     const live = sessions.get(sessionId)
     if (live && Array.isArray(live.events)) {
       result = scanCutSeq(live.events, messageId)
     } else {
-      const query = ctx.get('sessionQuery')
+      const query = ctx.get<SessionQueryEngine>('sessionQuery')
       if (query) {
         try {
           const log = await query.readSession(sessionId)

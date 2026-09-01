@@ -13,9 +13,12 @@ export type { EnvErrorKind, FeedbackKind }
 // 事实来源：snapshots.js setFeedback 的写入侧——`{ failed: true, ...buildFeedbackError(..) }`
 // （含 kind）与 `{ skipped: parseSkipped(out) }`；feedbackFor 熔断分支还产出
 // `{ failed: true, error }`（无 kind），故 error/kind 均可选。
+// 读取侧（saveIndex/loadIndex/setFeedback 的 `fb.failed`/`fb.skipped` 跨成员访问）
+// 依赖互补的 `?: undefined` 字段：联合判别语义不变（运行时形状与互斥不变），
+// 只是让不存在于本成员的字段以 undefined 类型显式建模、读取合法。
 export type SnapshotFeedback =
-  | { failed: true; error?: string; kind?: FeedbackKind }
-  | { skipped: string[] }
+  | { failed: true; error?: string; kind?: FeedbackKind; skipped?: undefined }
+  | { skipped: string[]; failed?: undefined; error?: undefined; kind?: undefined }
 
 // index.json 条目（snapshots-persist.test.js 钉住）。failed 条目可无对应 tag，
 // feedback 与条目共存即可（类型上不强约束）。

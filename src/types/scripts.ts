@@ -10,13 +10,13 @@
 // 运行时兜底（store.js SKIP）、单测（scripts-contract SKIP）、类型三处共享同一份事实。
 
 // 模板参数里的 store 形状（模板实际消费字段：dir/git/repo/excludeFile/maxFileBytes；
-// 宽松可选以兼容 storeFromDir 等临时包装）
+// 真实 store（makeStore/storeFromDir）恒全量具备，类型侧按必填建模）
 export interface ScriptStore {
   dir: string
-  repo?: string
+  repo: string
   git: string
-  excludeFile?: string
-  maxFileBytes?: number
+  excludeFile: string
+  maxFileBytes: number
 }
 
 // 哨兵/标记字面量（模板输出与解析函数逐字呼应，M5 起编译期锁死）

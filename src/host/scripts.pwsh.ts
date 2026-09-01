@@ -85,7 +85,7 @@ function dropGitlinksBlock() {
 // PF-9 合批：命中路径先收进 List 再多路径合参（每批 100，与 purgeTags
 // 分块同款纪律），update-index 子进程数 N → N/100。
 // 依赖外层已定义的 $git/$g/$root。
-function oversizeBlock(maxBytes) {
+function oversizeBlock(maxBytes: number): string {
   return [
     '$oversizeStack = [System.Collections.Generic.Stack[string]]::new()',
     '$oversizeStack.Push($root)',
@@ -129,7 +129,7 @@ function oversizeBlock(maxBytes) {
 //   链路，「改排除即时生效」承诺（AGENTS.md 钉）不变。
 // - PF-9 合批：清理循环逐条 update-index 每次 fork 一个 git 子进程，改为
 //   多路径合参（每批 100，与 purgeTags 分块同款纪律）N 次 → N/100。
-function excludeSyncBlock(excludeFile, base) {
+function excludeSyncBlock(excludeFile: string, base: string[]): string {
   // 兜底含两种存储目录名：降级为 .dsh-recall-snapshots/，home 存储为
   // dsh-recall-snapshots/（root=HOME 时落入工作区，漏排除会自吞，issue #6）
   const baseList = (Array.isArray(base) && base.length ? base : ['.git', 'node_modules/', '.dsh-recall-snapshots/', 'dsh-recall-snapshots/']).map(psq).join(',')

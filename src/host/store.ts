@@ -9,15 +9,15 @@
  * 由 lib/index.js 在 apply(ctx) 里装配，插件卸载时随 Fiber 一起丢弃。
  */
 
-// @ts-nocheck —— TS 迁移 M1 临时豁免：rt.scripts 是按平台二选一的模块联合
-// 类型，平台专属成员（homeDirScript/probeHomeScript）在联合上不可达，
-// 属已知的 scripts 契约形态（M3 types/scripts.ts 结构化建模，M5 编译期锁死）。
-// M6 store.ts 迁移时以显式断言/契约类型收口，本行随文件迁移移除。
 import os from 'node:os'
 import crypto from 'node:crypto'
 import * as pwshScripts from './scripts.pwsh.js'
 import * as posixScripts from './scripts.posix.js'
 import { classifyEnvError } from './diagnostics.js'
+import type { Runtime, SharedState, StoreInfo, ShellRunOptions, ErrorRecord } from '../types/state.js'
+import type { PwshScripts, PosixScripts } from '../types/scripts.js'
+import type { HostContext, SessionQueryEngine } from '../types/dsh-contract.js'
+import type { ResolvedConfig } from '../types/config.js'
 
 // home 不可写时迁移重试的节流间隔：避免每条消息都白试一次注定失败的迁移
 const HOME_RETRY_MS = 300000
@@ -35,7 +35,12 @@ const ERROR_BUFFER_MAX = 20
 // ~/dsh-recall-snapshots 而非 ~/.dsh/dsh-recall-snapshots（issue #11 实证）。
 // 返回 third 标记是否走了第三档——只有第三档才涉及旧容器迁移（存量用户
 // 的数据在旧位，改 base 前要先搬）。
-export function selectPosixHomeBase({ probed, envHome, homedir }) {
+export interface PosixHomeInputs {
+  probed: string
+  envHome: string
+  homedir: string
+}
+export function selectPosixHomeBase({ probed, envHome, homedir }: PosixHomeInputs): { base: string; third: boolean } {
   if (probed) return { base: probed, third: false }
   if (envHome) return { base: envHome, third: false }
   return { base: homedir + '/.dsh', third: true }
@@ -48,7 +53,11 @@ export function selectPosixHomeBase({ probed, envHome, homedir }) {
 // 与 tryUpgradeToHome 的非致命迁移哲学一致：数据不丢永远优先于路径规范。
 // 探测命令自身失败按同策略回落旧位——此刻无法判断旧容器是否存在，选新位
 // 会让存量用户「看不到」历史快照，选旧位对新装机只是维持修复前的行为。
-export async function resolvePosixHomeBase(deps, { probed, envHome, homedir }) {
+export async function resolvePosixHomeBase(
+  deps: { runShell(cmd: string, opts?: ShellRunOptions): Promise<string>; scripts: PosixScripts; recordError(text: string): void },
+  inputs: PosixHomeInputs
+): Promise<string> {
+  const { probed, envHome, homedir } = inputs
   const sel = selectPosixHomeBase({ probed, envHome, homedir })
   if (!sel.third) return sel.base
   try {
@@ -72,7 +81,7 @@ export async function resolvePosixHomeBase(deps, { probed, envHome, homedir }) {
 // CLEANUP_SKIPPED_FRESH_LOCK = 存在 5 分钟内的新锁（疑似 git 操作进行中），
 // 清扫未触碰；CLEANUP_DONE = 原有清扫路径执行完毕。解析按标记行匹配，
 // 与模板输出逐字对应（改标记必须两侧同步）。
-export function parseCleanupResult(out) {
+export function parseCleanupResult(out: unknown): { otherPid: number | null; skippedFresh: boolean } {
   const m = String(out || '').match(/CLEANUP_OTHER_INSTANCE\s+(\d+)/)
   if (m) return { otherPid: parseInt(m[1], 10), skippedFresh: false }
   if (String(out || '').indexOf('CLEANUP_SKIPPED_FRESH_LOCK') >= 0) return { otherPid: null, skippedFresh: true }
@@ -82,21 +91,21 @@ export function parseCleanupResult(out) {
 // rename 步 ENOENT 判定（模块级纯逻辑，单测直接覆盖）：POSIX mv 与
 // pwsh Move-Item 的「目标不存在」文案集合，且错误必须提到 tmp 文件名
 //（basename）——只认 rename 步的错误形态，误吞面最小。
-export function isTmpConsumedError(error, basename) {
+export function isTmpConsumedError(error: unknown, basename: string): boolean {
   const s = String(error || '')
   if (!basename || s.indexOf(basename) < 0) return false
   return /No such file/i.test(s) || /does not exist/i.test(s) || /cannot find path/i.test(s)
 }
 
-export function createRuntime(ctx, config) {
+export function createRuntime(ctx: HostContext, config: ResolvedConfig): Runtime {
   const shell = ctx.shell
   const sessions = ctx.sessions
 
   const isWin = process.platform === 'win32'
   const SEP = isWin ? '\\' : '/'
-  const scripts = isWin ? pwshScripts : posixScripts
+  const scripts: PwshScripts | PosixScripts = isWin ? pwshScripts : posixScripts
 
-  const state = {
+  const state: SharedState = {
     roots: new Map(),
     stores: new Map(),
     snapshots: new Map(),
@@ -135,7 +144,7 @@ export function createRuntime(ctx, config) {
   // 20 条环形缓冲刷成同一条目、console.error 同步刷屏，其他诊断信息全被
   // 挤掉。相邻重复只更新 time/count——间隔其他错误的重复仍新建条目，错误
   // 时序不丢；kind 随条目富集（classifyEnvError），供 status 端点机器分流。
-  function recordError(text) {
+  function recordError(text: string) {
     const message = String(text)
     const last = state.errors[state.errors.length - 1]
     if (last && last.message === message) {
@@ -143,7 +152,8 @@ export function createRuntime(ctx, config) {
       last.count += 1
       return
     }
-    state.errors.push({ time: Date.now(), message, count: 1, kind: classifyEnvError(message) })
+    const rec: ErrorRecord = { time: Date.now(), message, count: 1, kind: classifyEnvError(message) }
+    state.errors.push(rec)
     if (state.errors.length > ERROR_BUFFER_MAX) state.errors.splice(0, state.errors.length - ERROR_BUFFER_MAX)
     console.error(message)
   }
@@ -160,8 +170,8 @@ export function createRuntime(ctx, config) {
     const SKIP = new Set(['homeDirScript', 'probeHomeScript', 'legacyHomeMigrateScript'])
     // 豁免集事实源：src/types/scripts.ts 平台专属接口（PwshScripts/PosixScripts
     // extends 差分）；本集合是它的运行时镜像，M5 起由 tests/types satisfies 编译期锁死
-    const pwshKeys = Object.keys(pwshScripts).filter((k) => !SKIP.has(k) && typeof pwshScripts[k] === 'function')
-    const posixKeys = Object.keys(posixScripts).filter((k) => !SKIP.has(k) && typeof posixScripts[k] === 'function')
+    const pwshKeys = Object.keys(pwshScripts).filter((k) => !SKIP.has(k) && typeof (pwshScripts as Record<string, unknown>)[k] === 'function')
+    const posixKeys = Object.keys(posixScripts).filter((k) => !SKIP.has(k) && typeof (posixScripts as Record<string, unknown>)[k] === 'function')
     const missing = pwshKeys.filter((k) => posixKeys.indexOf(k) < 0)
     if (missing.length) recordError('recall script parity: posix 缺少导出 ' + missing.join(', '))
   })()
@@ -180,8 +190,8 @@ export function createRuntime(ctx, config) {
   // dsh-subprocess 的 lib/types/types.d.ts；截断时 text 只剩流尾部）。需要
   // 「解析完整 stdout」的调用方（loadIndex）用它区分「读截断」与「内容损坏」；
   // 其余调用方继续用 runShell 拿纯文本，签名不变。
-  async function runShellMeta(command, opts) {
-    const sp = ctx.get('sandboxPolicy')
+  async function runShellMeta(command: string, opts?: ShellRunOptions): Promise<{ text: string; truncated: boolean }> {
+    const sp = ctx.get<{ workspaceRoot?: string }>('sandboxPolicy')
     const spec = shell.resolve({
       // 编码前导：pwsh 侧统一 UTF-8 输出（中文机器 GBK 代码页不再乱码）；
       // bash 侧 LC_ALL=C 确定序。各模板自带，这里统一前置注入。
@@ -210,7 +220,7 @@ export function createRuntime(ctx, config) {
     }
   }
 
-  async function runShell(command, opts) {
+  async function runShell(command: string, opts?: ShellRunOptions): Promise<string> {
     return (await runShellMeta(command, opts)).text
   }
 
@@ -220,12 +230,12 @@ export function createRuntime(ctx, config) {
   // 非字面量赋值天然不匹配；含单引号的罕见路径会让 psq 的 '' 转义截断
   // 提取结果——清扫脚本对错误路径只是 no-op（杀不到进程、删不到锁），
   // 安全降级为本兜底加入前的行为。
-  function extractGitDir(command) {
+  function extractGitDir(command: string): string | null {
     const m = String(command).match(/(?:^|\n)[ \t]*(?:\$g|g)[ \t]*=[ \t]*'([^']+)/)
     return m ? m[1] : null
   }
 
-  async function cleanupAfterGitFailure(command) {
+  async function cleanupAfterGitFailure(command: string): Promise<void> {
     // 哨兵识别清扫脚本自身：它也定义 $g 且可能失败（如 taskkill 缺失），
     // 不拦住会「清扫失败 → 再清扫」无限递归
     if (!command || String(command).indexOf('RECALL_CLEANUP') >= 0) return
@@ -242,7 +252,7 @@ export function createRuntime(ctx, config) {
     } catch (error) { /* best-effort：清扫失败不影响原始错误的抛出 */ }
   }
 
-  async function resolveRoot(sessionId) {
+  async function resolveRoot(sessionId: string | null): Promise<string | null> {
     const key = sessionId ? String(sessionId) : 'fallback'
     const cached = state.roots.get(key)
     if (cached) return cached
@@ -265,7 +275,7 @@ export function createRuntime(ctx, config) {
       // store。listSessions 是目录级 header 枚举，不触碰全量日志；解析
       // 失败静默走回退，不阻断主流程。
       try {
-        const query = ctx.get('sessionQuery')
+        const query = ctx.get<SessionQueryEngine>('sessionQuery')
         if (query && typeof query.listSessions === 'function') {
           const records = await query.listSessions()
           const rec = (records || []).find((r) => r && r.header && r.header.id === sessionId)
@@ -277,7 +287,7 @@ export function createRuntime(ctx, config) {
       } catch (error) { /* 冷元数据不可用则走回退 */ }
     }
     if (!root) {
-      const sp = ctx.get('sandboxPolicy')
+      const sp = ctx.get<{ workspaceRoot?: string }>('sandboxPolicy')
       if (sp && sp.workspaceRoot) root = sp.workspaceRoot
     }
     if (root) {
@@ -293,7 +303,7 @@ export function createRuntime(ctx, config) {
 
   // 解析 git 可执行文件路径：求值一次并缓存，脚本里用绝对路径调用，
   // 避免每条命令依赖 PATH（DSH 进程 PATH 可能不含 git）。
-  async function resolveGit() {
+  async function resolveGit(): Promise<string> {
     if (state.gitExe !== null) return state.gitExe
     try {
       const path = scripts.stripBom(await runShell(scripts.resolveGitScript(), { stdoutMaxBytes: 4096 })).trim()
@@ -306,9 +316,11 @@ export function createRuntime(ctx, config) {
 
   // win32：哈希在 PowerShell 里算（SHA256 Create 兼容 PS 5.1），连带
   // $env:DSH_HOME / $env:USERPROFILE 的解析都在 shell 侧完成。
-  async function homeDirForWin(root) {
+  // scripts 是按平台二选一的联合，homeDirScript 仅 pwsh 侧存在——本方法
+  // 只在 isWin 分支被触达，显式断言到 PwshScripts（豁免集事实源见 types/scripts.ts）
+  async function homeDirForWin(root: string): Promise<string | null> {
     const envHome = (process.env && process.env.DSH_HOME) || ''
-    const text = scripts.stripBom(await runShell(scripts.homeDirScript(root, envHome), { stdoutMaxBytes: 4096 })).trim()
+    const text = scripts.stripBom(await runShell((scripts as PwshScripts).homeDirScript(root, envHome), { stdoutMaxBytes: 4096 })).trim()
     if (!text) return null
     // 折叠 Join-Path 可能带出的连续反斜杠；开头的双反斜杠是 UNC 前缀
     // （DSH_HOME/主目录指到网络盘），折叠掉会把 \\server\share 变成无效
@@ -324,29 +336,30 @@ export function createRuntime(ctx, config) {
   // Linux sha256sum / macOS shasum 的二选一移植成本。三档选择与旧容器
   // 迁移编排都委托模块级纯函数（resolvePosixHomeBase），本方法只负责探测
   // 输入与结果缓存（迁移随缓存每进程至多跑一次）。
-  async function posixHomeBaseResolve() {
+  async function posixHomeBaseResolve(): Promise<string> {
     if (state.posixHomeBase === null) {
       let probed = ''
       try {
-        probed = (await runShell(scripts.probeHomeScript(), { stdoutMaxBytes: 4096 })).trim()
+        // probeHomeScript 仅 posix 侧存在，本方法只在 POSIX 运行时被触达
+        probed = (await runShell((scripts as PosixScripts).probeHomeScript(), { stdoutMaxBytes: 4096 })).trim()
       } catch (error) {
         probed = ''
       }
       state.posixHomeBase = await resolvePosixHomeBase(
-        { runShell, scripts, recordError },
+        { runShell, scripts: scripts as PosixScripts, recordError },
         { probed, envHome: (process.env && process.env.DSH_HOME) || '', homedir: os.homedir() }
       )
     }
     return state.posixHomeBase
   }
 
-  async function homeDirForPosix(root) {
+  async function homeDirForPosix(root: string): Promise<string> {
     const base = await posixHomeBaseResolve()
     const hash = crypto.createHash('sha256').update(root, 'utf8').digest('hex')
     return base.replace(/\/+$/, '') + '/dsh-recall-snapshots/' + hash
   }
 
-  async function homeDirFor(root) {
+  async function homeDirFor(root: string): Promise<string | null> {
     return isWin ? homeDirForWin(root) : homeDirForPosix(root)
   }
 
@@ -380,7 +393,7 @@ export function createRuntime(ctx, config) {
   // 的超大文件剔除）按调用时从 store 读取，用户改 config 后下一条命令
   // 即生效，无需重启——因此用 getter 跟随 config 热更新，而不是创建时
   // 快照（settings 卡片改 maxFileBytes 后 store 缓存不重建）。
-  function makeStore(dir, home) {
+  function makeStore(dir: string, home: boolean): StoreInfo {
     const excludeFile = home
       ? dir.slice(0, dir.lastIndexOf(SEP)) + SEP + 'exclude.txt'
       : dir + SEP + 'exclude.txt'
@@ -399,7 +412,7 @@ export function createRuntime(ctx, config) {
   // `resolveStore`（它可能新建另一个目录），所以直接以已枚举的 dir 为准。
   // home 参数只影响 excludeFile；删除 tag/index 不依赖它，因而未知时用
   // false 也安全。
-  function storeFromDir(dir, home) {
+  function storeFromDir(dir: string, home: boolean): StoreInfo {
     return makeStore(dir, Boolean(home))
   }
 
@@ -407,17 +420,17 @@ export function createRuntime(ctx, config) {
   // 单向 SHA256，反解不了——「快照管理」跨工作区展示时靠它把哈希目录映射
   // 回工作区名。best-effort（失败不阻断主流程），旧 store 在 resolveStore
   // 再次被调用（重启后首个 init/快照/管理列表）时自然补写，存量自愈。
-  function persistRootHint(store, root) {
+  function persistRootHint(store: StoreInfo, root: string): void {
     writeTextViaShell(store.dir + SEP + 'root.txt', root).catch(() => {})
   }
 
   // 存储根：优先放 DSH home（保持项目目录干净）。shell 以宿主身份执行，
   // 受限会话（workspace-write/read-only）也能写 home；只有 home 本身不可写
   // （如 DSH_HOME 指向只读/网络盘）才降级到项目内（功能优先于干净）。
-  async function resolveStore(root) {
+  async function resolveStore(root: string): Promise<StoreInfo> {
     const cached = state.stores.get(root)
     if (cached) return cached
-    let homeDir = null
+    let homeDir: string | null = null
     try {
       homeDir = await homeDirFor(root)
     } catch (error) {
@@ -445,14 +458,14 @@ export function createRuntime(ctx, config) {
   // 旧版迁移：宿主身份执行前的版本在受限会话里会把影子仓库降级到项目内，
   // 这里在下一条消息快照前把它整体迁回 home 并删除项目内目录，恢复
   // 「项目目录干净」。失败节流 5 分钟，避免 home 不可写时每条消息白试。
-  async function tryUpgradeToHome(root) {
+  async function tryUpgradeToHome(root: string): Promise<StoreInfo | null> {
     const store = state.stores.get(root)
-    if (!store || store.home) return store
+    if (!store || store.home) return store || null
     const now = Date.now()
     const last = state.homeRetryAt.get(root) || 0
     if (now - last < HOME_RETRY_MS) return store
     state.homeRetryAt.set(root, now)
-    let homeDir = null
+    let homeDir: string | null = null
     try {
       homeDir = await homeDirFor(root)
     } catch (error) {
@@ -498,7 +511,7 @@ export function createRuntime(ctx, config) {
   // 目标——本侧写语义已被达成。Windows 侧「偶发一次 Move-Item:
   // index.json.tmp does not exist」即同根。不进 recordError（用户错误列表
   // 刷屏正是要消除的症状），console.error 留诊断痕迹；其余错误原样抛出。
-  async function renameTmpQuietly(tmp, file) {
+  async function renameTmpQuietly(tmp: string, file: string): Promise<void> {
     try {
       await runShell(scripts.renameFileCmd(tmp, file), { stdoutMaxBytes: 4096 })
     } catch (error) {
@@ -511,7 +524,7 @@ export function createRuntime(ctx, config) {
     }
   }
 
-  async function writeTextViaShell(file, text) {
+  async function writeTextViaShell(file: string, text: string): Promise<void> {
     const body = String(text == null ? '' : text)
     const tmp = file + '.tmp'
     await runShell(scripts.fileWriteStdinCmd(tmp), { stdin: body, stdoutMaxBytes: 4096 })
@@ -525,7 +538,7 @@ export function createRuntime(ctx, config) {
   // 分类成 snapFeedback 的可行动提示（此前吞成布尔，客户端空轮询 20 次、
   // 用户零感知，issue #11 主线缺口）；init/预热调用方忽略返回值，不受形状
   // 变化影响。
-  async function ensureGit(root, store) {
+  async function ensureGit(root: string, store: StoreInfo): Promise<{ ok: boolean; error?: string }> {
     if (state.gitReady.has(store.git)) return { ok: true }
     const gitExe = await resolveGit()
     if (!gitExe) {
@@ -556,8 +569,8 @@ export function createRuntime(ctx, config) {
   // pwsh 侧 legacyRmScript 已加 -ErrorAction SilentlyContinue：「目录本就
   // 不存在」（常态）不再抛错中断，而是以成功返回被标记——否则常态下每次
   // init 都白跑一条进程，标记就失去了意义。
-  const legacyCleaned = new Set()
-  function cleanupLegacy(root) {
+  const legacyCleaned = new Set<string>()
+  function cleanupLegacy(root: string): void {
     const store = state.stores.get(root)
     if (!store || !store.home) return
     if (legacyCleaned.has(root)) return
