@@ -13,7 +13,7 @@
 | [P1 工程补课](./completed/plan-p1.md) | 最小测试集 + CI、快照跳过记录持久化、存储总量上限 | 已实施 |
 | [设置页体验优化](./completed/plan-settings-ux.md) | 设置卡片可用性缺陷、新增配置项、UI 打磨 | 已实施 |
 | [P2 打磨项](./pending/plan-p2.md) | 键盘导航、FORMAT/SECURITY 文档、OIDC 发布、包完整性、版本巡检 | 待实施（按需；P2-4、P2-5 已完成 2026-08-27） |
-| [TS 迁移（JS → TypeScript）](./pending/plan-ts-refactor.md) | 同形态复刻：源码迁移 TS、逐文件转译保包布局、编译期类型锁契约 | 待实施（v3 评审修订版） |
+| [TS 迁移（JS → TypeScript）](./pending/plan-ts-refactor.md) | 同形态复刻：源码迁移 TS、逐文件转译保包布局、编译期类型锁契约 | 待实施（v3.2；M1–M8 实施文档已拆出） |
 | [竞品改进：健壮性补强与结构拆分](./completed/plan-competitor-improvements.md) | rescue 救援闭环、index 原子写+校验、错误码收敛、client/index 拆分、版本家族 spike、verify-host、compat 台账 | 已实施（2026-08-28 审查发现的缺陷经修复计划全数闭环） |
 | [竞品改进实施审查修复](./completed/plan-competitor-fixes.md) | rescue tag 前缀契约（S1 致命）、孤儿重建过滤、POSIX 删除侧 if/fi、索引截断区分、errors 门禁、verify-host 装配复刻、产物新鲜度 CI | 已完成（2026-08-28；单测 172/172 绿、verify:host 绿，实施记录见该文档文末） |
 | [环境错误主动诊断（issue #11）](./completed/plan-env-diagnostics.md) | 错误分类与可行动提示、ensureGit/快照失败 toast 可见化、recordError 去重、POSIX home 漂移修复 + 旧容器迁移、并发实例探测 + stale 锁分级（M3） | 已完成（2026-08-28，含 M3；单测 212/212 绿、verify:host 绿，实施记录见该文档文末） |

@@ -14,7 +14,8 @@ docs/
 │   ├── research-competitors.md  # 竞品调研（改进计划的调研底稿，静态归档，不参与状态分目录）
 │   ├── pending/                 # 待实施 / 实施中
 │   │   ├── plan-p2.md           # P2 打磨项（按需挑选）
-│   │   └── plan-ts-refactor.md  # TS 迁移（JS → TypeScript，v3 评审修订版）
+│   │   ├── plan-ts-refactor.md  # TS 迁移（JS → TypeScript，v3.2）
+│   │   └── plan-ts-refactor-m1..m8.md  # TS 迁移 M1–M8 阶段实施文档
 │   └── completed/               # 已实施（原地保留实施记录与验收依据，完成不删除）
 │       ├── plan-p0.md               # P0 安全洞堵补
 │       ├── plan-p1.md               # P1 工程补课

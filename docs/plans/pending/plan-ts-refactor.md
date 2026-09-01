@@ -1,6 +1,6 @@
-# dsh-recall-plugin 重构计划（JS → TypeScript）v3
+# dsh-recall-plugin 重构计划（JS → TypeScript）v3.2
 
-> 状态：待实施（v3 评审修订版，评审通过即启动 M1） ｜ 上游文档：[improvement-plan.md](../improvement-plan.md)
+> 状态：待实施（v3.2 评审修订版，评审通过即启动 M1） ｜ 上游文档：[improvement-plan.md](../improvement-plan.md)
 >
 > 事实基准：仓库 HEAD `10f5e61`（2.3.1），2026-09-01 逐文件复核。
 >
@@ -12,6 +12,8 @@
 
 - **v1 → v2**：按仓库现状逐文件核对。测试规模更新为 25 个单测文件 + 2 个探针；`store.js` 保持原名（撤回 `runtime.ts` 改名）；client 改为 `.ts` + createElement 风格（撤回 `.tsx`）；构建方案改为逐文件转译以保住包布局零变化；删除 `.d.ts` 产出；里程碑重排为 M1–M7。
 - **v2 → v3**（评审修订）：修正不变量 3 的 files 白名单表述、package-layout 断言的引用与措辞、`lib/` 文件构成描述；消解 M4/M6 对 `snapshots` 的归属矛盾；补 tsconfig 两阶段演进；vitest `.js`→`.ts` 解析风险经 spike 实证消解（2026-09-01，vitest 4.1.11）；新增 M8 文档同步；风险表补本地工作流条目；按 docs 规范归位 `plans/pending/` 并挂总索引。
+- **v3 → v3.1**（实施文档拆分）：修正 tsconfig 演进细节——M2 必须保留 `allowJs`（否则 include 下无 TS 输入报 TS18003），`allowJs` 延至 M7 全部源文件 .ts 化后移除；里程碑拆出 M1–M8 实施文档（同目录 `plan-ts-refactor-m1..m8.md`）。
+- **v3.1 → v3.2**（评审修订，2026-09-01）：M1 tsconfig 补 `exclude`（lib/client.js 产物，豁免机制对重建产物无效）与 DOM lib（client 浏览器全局，M7 必需）；M3/M5 共享函数计数 26→28（实测）并补 5 个共享常量入 scripts 契约（对齐 §七 承诺与 scripts-contract.test.js 键集口径）；diagnostics 拆 `EnvErrorKind`/`FeedbackKind` 双联合（`Record` 互锁与 `'unknown'` 冲突）；state.errors 的 kind 修正为 `EnvErrorKind | null`；M5 豁免集断言改 `Record<键联合, true>` 字面量双向闭环；M2 补中间 commit 非绿说明与 exclude 移除；M6 风险表补 strict 回溯性波及 M4/M5。
 
 ---
 
@@ -187,7 +189,7 @@ await build({
   - `parse-contracts.test.ts`：dump/parse 函数返回结构 `satisfies` payloads.ts 类型
   - `api-contracts.test.ts`：client util 请求/响应类型与 routes 返回的 errBody 形状双向绑定（routes 返回多为动态构造对象，字面量断言铺不开，故以类型对偶 + errBody 形状为断言主体）
 - tsconfig include（终态）：`src/**/*` 与 `tests/types/**/*`；`tests/unit`、`tests/probe` 保持 `.js` 且退出类型检查范围（其职责是运行时回归网）；`scripts/*.mjs` 同样退出（构建工具链由 esbuild 运行时自校验）。
-- **tsconfig 两阶段演进**：M1 阶段源码仍在 `lib/`，tsconfig 为过渡形态——`allowJs + checkJs`、include `lib/**/*.js` 与 `src/client/**/*.js`、`noImplicitAny: false` 宽松基线；M2 移动完成后切换为终态形态（include 改指 `src/**/*`、移除 allowJs/checkJs），strict 全量收紧在 M6 完成。
+- **tsconfig 三阶段演进**（细节见各 M 实施文档）：M1 过渡形态——`allowJs + checkJs`、include `lib/**/*.js` 与 `src/client/**/*.js`、exclude 显式排除 `lib/client.js` 产物（重建会冲掉豁免注释，「产物不进类型检查」是全程纪律，M2 起由 include 边界自然承担）、`"lib"` 补 DOM（client 浏览器全局的类型来源，终态保留）、宽松基线；M2 迁移期形态——include 改指 `src/**/*`、关闭 checkJs、**保留 allowJs**（.js 文件仍需入程序：否则 include 下无 TS 输入报 TS18003，且模块解析断）；M6 收紧 `strict` 全量；M7 全部源文件 .ts 化后移除 `allowJs` 收终态。
 
 ### 4.3 CI 门禁与依赖
 
@@ -206,15 +208,17 @@ devDependencies 变更清单：`+ typescript`（^5）、`+ @types/node`（^20）
 | 阶段 | 内容 | 验收标准 |
 | --- | --- | --- |
 | M1 | `tsconfig.json` 过渡形态（allowJs + checkJs 宽松基线，include `lib/**` 与 `src/client/**`，noImplicitAny 起步关闭）+ `typecheck` 脚本 + CI 类型门禁 + devDeps 三项 + schemastery/dsh-settings 最小 ambient 声明；源码原地 `lib/` | tsc 通过（宽松基线）；现有单测 + 探针全绿 |
-| M2 | 13 个源文件纯移动 `lib/` → `src/host/`（rename-only commit）+ `build-host.mjs` 上线 + 统一新鲜度门禁 + 单测 import 改指 `src/host/` + tsconfig 切终态 include | 移动 commit 为纯 R 记录；一次性产物 diff 入库后，`npm run build` 再次重建时 `git diff --exit-code lib/` 为零；全部测试绿；`verify:host` 绿（仍消费 lib/index.js 产物，脚本零改动） |
+| M2 | 13 个源文件纯移动 `lib/` → `src/host/`（rename-only commit）+ `build-host.mjs` 上线 + 统一新鲜度门禁 + 单测 import 改指 `src/host/` + tsconfig 切迁移期形态（include 改指 `src/**`，关 checkJs 留 allowJs） | 移动 commit 为纯 R 记录；一次性产物 diff 入库后，`npm run build` 再次重建时 `git diff --exit-code lib/` 为零；全部测试绿；`verify:host` 绿（仍消费 lib/index.js 产物，脚本零改动） |
 | M3 | `src/types/` 七个类型文件全建（自 dsh-contract.md 与现状反推，含 client-contract.ts 与两个 ambient 模块的完整契约化） | `tsc --noEmit` 通过 |
 | M4 | 纯逻辑文件转 `.ts`：config/errors/diagnostics/dump-parse/session-info | 单测 1:1 通过 |
 | M5 | scripts 双模板 `.ts` + `types/scripts.ts` satisfies 契约；scripts-contract.test.js 断言全保留 | 双平台模板类型锁死；豁免集三处同源 |
 | M6 | 工厂与接线层 `.ts`：store/snapshots/maintenance/routes-core/routes-manage/index（各文件整体迁移，含其模块级纯逻辑导出）；tsconfig 收紧到 strict 全量 | `verify:host` 装配门禁全绿 |
-| M7 | client 侧 `.ts`（createElement 风格）+ build-client 入口切换 | 浏览器实弹冒烟（撤回按钮/确认面板/设置卡片） |
+| M7 | client 侧 `.ts`（createElement 风格）+ build-client 入口切换 + tsconfig 移除 allowJs 收终态 | 浏览器实弹冒烟（撤回按钮/确认面板/设置卡片） |
 | M8 | 文档同步：AGENTS.md/CODEBUDDY.md 文件地图改指 `src/`（`lib/` 标注为纯产物目录）；dsh-contract.md 与计划族中源码路径引用核对；README 开发命令说明（`npm run build` 语义变化）；CHANGELOG 记工程变更条目；评估 `check:upgrade` 纳入 typecheck | 文档与代码现状一致；本计划移入 `docs/plans/completed/` 并同步三处链接（docs 规范生命周期约定第 2 条） |
 
 每阶段独立 commit，回滚粒度到域；M2 的移动 commit 与类型化 commit 严格分离。
+
+阶段实施文档（任务分解/改动落点/验收/风险逐阶段细化）：[M1 类型基础设施](./plan-ts-refactor-m1.md) ｜ [M2 纯移动与构建切换](./plan-ts-refactor-m2.md) ｜ [M3 types 类型文件](./plan-ts-refactor-m3.md) ｜ [M4 纯逻辑文件](./plan-ts-refactor-m4.md) ｜ [M5 scripts 模板](./plan-ts-refactor-m5.md) ｜ [M6 工厂与接线层](./plan-ts-refactor-m6.md) ｜ [M7 client 与终态](./plan-ts-refactor-m7.md) ｜ [M8 文档同步与归档](./plan-ts-refactor-m8.md)
 
 ---
 
@@ -252,7 +256,7 @@ devDependencies 变更清单：`+ typescript`（^5）、`+ @types/node`（^20）
 阶段产物：
 
 - M1 产出：`tsconfig.json`（过渡形态）、`typecheck` 脚本、CI 类型门禁、devDeps 三项、两个最小 ambient 声明
-- M2 产出：`src/host/` 源码树（rename-only）、`scripts/build-host.mjs`、统一新鲜度门禁、tsconfig 终态 include
+- M2 产出：`src/host/` 源码树（rename-only）、`scripts/build-host.mjs`、统一新鲜度门禁、tsconfig 迁移期形态（include 已为终态值）
 - M3 产出：`src/types/` 七个类型文件
 - M4–M7 产出：逐域迁移提交，每阶段一个独立 commit 便于回滚
 - M8 产出：文档同步提交 + CHANGELOG 工程变更条目；本计划归档 `completed/`
