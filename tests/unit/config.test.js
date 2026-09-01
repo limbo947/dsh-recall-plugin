@@ -26,7 +26,7 @@ function chain() {
   return self
 }
 
-import { createConfig, DEFAULTS } from '../../lib/config.js'
+import { createConfig, DEFAULTS } from '../../src/host/config.js'
 
 describe('createConfig', () => {
   const ENV_KEYS = ['DSH_RECALL_GC_SNAPS', 'DSH_RECALL_GC_HOURS']

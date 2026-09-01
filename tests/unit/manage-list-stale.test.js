@@ -9,7 +9,7 @@
  */
 
 import { describe, it, expect } from 'vitest'
-import { createRoutesManage } from '../../lib/routes-manage.js'
+import { createRoutesManage } from '../../src/host/routes-manage.js'
 
 function makeDeps(opts = {}) {
   const listCache = { at: 0, items: opts.items || null, stale: false, refreshing: null }

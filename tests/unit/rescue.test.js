@@ -11,9 +11,9 @@
  */
 
 import { describe, it, expect, vi } from 'vitest'
-import { createSnapshots, rescueRollback } from '../../lib/snapshots.js'
-import * as pwshScripts from '../../lib/scripts.pwsh.js'
-import * as posixScripts from '../../lib/scripts.posix.js'
+import { createSnapshots, rescueRollback } from '../../src/host/snapshots.js'
+import * as pwshScripts from '../../src/host/scripts.pwsh.js'
+import * as posixScripts from '../../src/host/scripts.posix.js'
 
 const ROOT = 'D:/ws'
 const SID = 'session-1'

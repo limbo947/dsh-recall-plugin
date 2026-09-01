@@ -9,7 +9,7 @@
  */
 
 import { describe, it, expect } from 'vitest'
-import { createSnapshots } from '../../lib/snapshots.js'
+import { createSnapshots } from '../../src/host/snapshots.js'
 
 const ROOT = 'D:/ws'
 const SID = 'session-1'

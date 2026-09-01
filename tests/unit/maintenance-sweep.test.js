@@ -9,7 +9,7 @@
  */
 
 import { describe, it, expect } from 'vitest'
-import { createMaintenance } from '../../lib/maintenance.js'
+import { createMaintenance } from '../../src/host/maintenance.js'
 
 const ROOT = 'R1'
 

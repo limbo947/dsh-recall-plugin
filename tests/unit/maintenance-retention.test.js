@@ -8,7 +8,7 @@
  */
 
 import { describe, it, expect } from 'vitest'
-import { selectExpiredVictims, createMaintenance } from '../../lib/maintenance.js'
+import { selectExpiredVictims, createMaintenance } from '../../src/host/maintenance.js'
 
 const DAY = 86400000
 

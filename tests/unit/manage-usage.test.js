@@ -8,7 +8,7 @@
  */
 
 import { describe, it, expect } from 'vitest'
-import { createRoutesManage } from '../../lib/routes-manage.js'
+import { createRoutesManage } from '../../src/host/routes-manage.js'
 
 function makeDeps(stores, opts = {}) {
   const calls = []

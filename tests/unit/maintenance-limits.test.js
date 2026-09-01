@@ -6,7 +6,7 @@
  */
 
 import { describe, it, expect } from 'vitest'
-import { selectOverLimitVictims, createMaintenance } from '../../lib/maintenance.js'
+import { selectOverLimitVictims, createMaintenance } from '../../src/host/maintenance.js'
 
 function snapMap(entries) {
   const m = new Map()

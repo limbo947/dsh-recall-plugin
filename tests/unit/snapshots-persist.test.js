@@ -13,8 +13,8 @@
  */
 
 import { describe, it, expect } from 'vitest'
-import { createSnapshots, isSafetySnapshotId, parseTagsWithTime } from '../../lib/snapshots.js'
-import { ENV_HINTS } from '../../lib/diagnostics.js'
+import { createSnapshots, isSafetySnapshotId, parseTagsWithTime } from '../../src/host/snapshots.js'
+import { ENV_HINTS } from '../../src/host/diagnostics.js'
 
 function fakeState() {
   return {

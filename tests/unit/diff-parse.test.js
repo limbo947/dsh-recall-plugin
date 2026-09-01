@@ -9,7 +9,7 @@
  */
 
 import { describe, it, expect } from 'vitest'
-import { parseDiffOutput, parseTreeId } from '../../lib/snapshots.js'
+import { parseDiffOutput, parseTreeId } from '../../src/host/snapshots.js'
 
 describe('parseTreeId（snapshotScript / diffScript 输出的 TREE 行）', () => {
   it('SNAP_SKIP 与 SNAP_OK 混合输出中取 TREE 值', () => {

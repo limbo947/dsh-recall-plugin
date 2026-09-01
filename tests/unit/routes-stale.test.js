@@ -10,8 +10,8 @@
  */
 
 import { describe, it, expect } from 'vitest'
-import { createRoutesCore } from '../../lib/routes-core.js'
-import * as E from '../../lib/errors.js'
+import { createRoutesCore } from '../../src/host/routes-core.js'
+import * as E from '../../src/host/errors.js'
 
 const ROOT = 'D:/ws'
 const ID = 'm1'

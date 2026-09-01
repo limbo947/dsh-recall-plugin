@@ -10,7 +10,7 @@
  */
 
 import { describe, it, expect } from 'vitest'
-import { createRoutesManage } from '../../lib/routes-manage.js'
+import { createRoutesManage } from '../../src/host/routes-manage.js'
 
 // op='list' 只触达：supported / listCache / dumpStores / state / sessionInfo；
 // 其余 deps 留空（undefined），不被 list 路径访问。

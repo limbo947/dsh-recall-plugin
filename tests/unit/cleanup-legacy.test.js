@@ -9,7 +9,7 @@
  */
 
 import { describe, it, expect } from 'vitest'
-import { createRuntime } from '../../lib/store.js'
+import { createRuntime } from '../../src/host/store.js'
 
 function fakeCtx() {
   const calls = []

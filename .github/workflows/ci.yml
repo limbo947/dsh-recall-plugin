@@ -26,12 +26,12 @@ jobs:
         # 单测里的 package-layout.test.js 已跑 npm pack --dry-run 断言包内容，
         # 无需单独 shell 步骤（计划原文：测试形式比 shell 步骤更可移植）。
         run: npm test
-      - name: Client bundle freshness gate
-        # F-G6 产物新鲜度门禁：改 src/client/ 忘 rebuild 时 lib/client.js 陈旧
-        # 可静默合入并随发布流出。esbuild 在 devDependencies（上面已装），
-        # 同版本输出确定性可依赖——rebuild 后产物必须与提交内容逐字一致，
-        # 否则红。build-client.mjs 自带的包裹格式/id/require 白名单断言同时
-        # 充当产物质量冒烟。
+      - name: Bundle freshness gate
+        # 统一产物新鲜度门禁：改 src/ 忘 rebuild 时 lib/ 产物陈旧可静默合入
+        # 并随发布流出（host 13 产物 + client.js 合并为一道）。esbuild 在
+        # devDependencies（上面已装），同版本输出确定性可依赖——rebuild 后
+        # 产物必须与提交内容逐字一致，否则红。build-client.mjs 自带的包裹
+        # 格式/id/require 白名单断言同时充当 client 产物质量冒烟。
         run: |
-          node scripts/build-client.mjs
-          git diff --exit-code lib/client.js
+          npm run build
+          git diff --exit-code lib/

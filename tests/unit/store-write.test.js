@@ -9,7 +9,7 @@
  */
 
 import { describe, it, expect } from 'vitest'
-import { isTmpConsumedError } from '../../lib/store.js'
+import { isTmpConsumedError } from '../../src/host/store.js'
 
 const BASE = 'index.json.tmp'
 

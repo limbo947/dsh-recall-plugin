@@ -8,8 +8,8 @@
  */
 
 import { describe, it, expect } from 'vitest'
-import { selectPosixHomeBase, resolvePosixHomeBase } from '../../lib/store.js'
-import { legacyHomeMigrateScript } from '../../lib/scripts.posix.js'
+import { selectPosixHomeBase, resolvePosixHomeBase } from '../../src/host/store.js'
+import { legacyHomeMigrateScript } from '../../src/host/scripts.posix.js'
 
 describe('selectPosixHomeBase（三档回退选择）', () => {
   it('第一档：bash env 探测命中 → 直接用，不涉迁移', () => {

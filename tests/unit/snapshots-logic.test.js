@@ -6,7 +6,7 @@
  */
 
 import { describe, it, expect } from 'vitest'
-import { parseSkipped, parseChanges, scanCutSeq } from '../../lib/snapshots.js'
+import { parseSkipped, parseChanges, scanCutSeq } from '../../src/host/snapshots.js'
 
 describe('parseSkipped', () => {
   it('提取 SNAP_SKIP 开头的行，剥掉前缀', () => {

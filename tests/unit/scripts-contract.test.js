@@ -11,8 +11,8 @@
  */
 
 import { describe, it, expect } from 'vitest'
-import * as pwsh from '../../lib/scripts.pwsh.js'
-import * as posix from '../../lib/scripts.posix.js'
+import * as pwsh from '../../src/host/scripts.pwsh.js'
+import * as posix from '../../src/host/scripts.posix.js'
 
 // 与 store.js checkScriptParity 的豁免集保持一致：
 // 平台专属导出（homeDirScript 的 $h 链只在 pwsh 侧需要；probeHomeScript

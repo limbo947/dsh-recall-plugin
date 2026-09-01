@@ -8,7 +8,7 @@
  */
 
 import { describe, it, expect } from 'vitest'
-import { parseExcludeDump } from '../../lib/dump-parse.js'
+import { parseExcludeDump } from '../../src/host/dump-parse.js'
 
 const b64 = (s) => Buffer.from(s, 'utf8').toString('base64')
 

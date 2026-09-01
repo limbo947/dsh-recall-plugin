@@ -7,7 +7,7 @@
  */
 
 import { describe, it, expect } from 'vitest'
-import { titleFromEvents, messageTextFromEvents } from '../../lib/session-info.js'
+import { titleFromEvents, messageTextFromEvents } from '../../src/host/session-info.js'
 
 describe('titleFromEvents', () => {
   it('取最新一条 session/title', () => {

@@ -13,7 +13,7 @@ import { describe, it, expect } from 'vitest'
 // 会带出 @deepseek-ai/schemastery（运行期私有 peer 依赖，CI 只装 devDeps 不可得），
 // 且本文件没有 config.test.js 那样的 vi.mock——CI 上整个套件加载即崩（2.2.0/2.2.1
 // 连续 6 次 CI 失败根因）。dump-parse.js 是零依赖纯函数，与 exclude-dump.test.js 同源。
-import { parseStoresDump } from '../../lib/dump-parse.js'
+import { parseStoresDump } from '../../src/host/dump-parse.js'
 
 describe('parseStoresDump LINEAGE 段（PF-4）', () => {
   const lineage = [{ childId: 'c1', parentId: 'p1', time: 1 }]

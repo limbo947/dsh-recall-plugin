@@ -4,7 +4,7 @@
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
     "allowJs": true,
-    "checkJs": true,
+    "checkJs": false,
     "strict": false,
     "noImplicitAny": false,
     "noEmit": true,
@@ -13,6 +13,5 @@
     "types": ["node"],
     "lib": ["ES2022", "DOM", "DOM.Iterable"]
   },
-  "include": ["lib/**/*.js", "src/client/**/*.js", "src/types/**/*.d.ts"],
-  "exclude": ["node_modules", "lib/client.js"]
+  "include": ["src/**/*", "tests/types/**/*"]
 }

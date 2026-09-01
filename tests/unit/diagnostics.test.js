@@ -13,8 +13,8 @@
  */
 
 import { describe, it, expect, vi, afterEach } from 'vitest'
-import { classifyEnvError, ENV_HINTS, buildFeedbackError } from '../../lib/diagnostics.js'
-import { createRuntime, parseCleanupResult } from '../../lib/store.js'
+import { classifyEnvError, ENV_HINTS, buildFeedbackError } from '../../src/host/diagnostics.js'
+import { createRuntime, parseCleanupResult } from '../../src/host/store.js'
 
 describe('classifyEnvError（纯函数）', () => {
   it('issue #11 原文样本 → lock', () => {
