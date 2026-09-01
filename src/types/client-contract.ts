@@ -104,7 +104,10 @@ export interface ClientSessionsService {
 }
 
 export interface ClientWorkspacesService {
-  archiveSession(sessionId: string): Promise<unknown> | unknown
+  // 返回类型按调用方既有假设建模为 Promise（迁移前 JS 直接对其结果 .catch）：
+  // 真实服务恒返 thenable；若某版本返非 thenable，旧行为是当场 TypeError，
+  // 不做 Promise.resolve 静默兜底（避免掩盖官方契约漂移）
+  archiveSession(sessionId: string): Promise<unknown>
 }
 
 // ---- conversation 服务（0.1.2 新增，可选探测降级）----

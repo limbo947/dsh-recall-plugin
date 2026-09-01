@@ -21,7 +21,7 @@
 
 ### 候选 A：`sessionQuery.readTitleSnapshots` —— 冷会话标题官方通道（建议未来落地）
 
-**现状**：`../src/host/routes-manage.ts` titles 端点（L390-413）自研「`readSession` 整日志解压 + `titleFromEvents` 折标题 + `runLimited` 并发 4」。
+**现状**：`../src/host/routes-manage.ts` titles 端点（L428 起）自研「`readSession` 整日志解压 + `titleFromEvents` 折标题 + `runLimited` 并发 4」。
 
 **官方契约（npm 0.1.2-alpha.2 产物实证）**：
 
@@ -47,7 +47,7 @@ async readTitleSnapshots(sessionIds, signal?)            // → SessionTitleObse
 - `SessionInputShell` 同时有 `setDraft(text)`（facade.d.ts L119）与 `readonly actions: InputActions`（facade.d.ts L66）→ `actions.setDraft(text)`（input.d.ts L202-204）
 - client guard 的 `ctx.get(name)` 走 `readService(name, requireDeclaration=false)`，**不强制 inject 声明**（cordis-client-runner client.js L325-335），故 `ctx.get('conversation')` 在插件 apply ctx 下可解析
 
-**结论：可用。** `../src/client/recall-node.js` fillDraft 的
+**结论：可用。** `../src/client/recall-node.ts` fillDraft 的
 `conversation.input.shell(sid).actions.setDraft` / `.setDraft` 探测链在 0.1.2-alpha.2 全部成立；
 dsh-contract.md §1.1 conversation 段描述准确，代码无需修改。
 
@@ -91,7 +91,7 @@ interface TurnTailOwnerProps { turn: TurnLocation; seq: number; openFile(path: s
 
 **候选 C 落地步骤**（如后续实施，属功能扩展，先评估 UX）：
 1. 新增 turnTail 渲染器（chain slot，select 接受 owner），复用 `executeRecall`/`preview` 链路按 `seq` 定位目标消息；
-2. `src/client/app.js` 注册 `conversation.chat.turnTail`；`npm run build` 后跑测试与冒烟。
+2. `src/client/app.ts` 注册 `conversation.chat.turnTail`；`npm run build` 后跑测试与冒烟。
 
 ---
 

@@ -8,7 +8,7 @@
  */
 
 import { ENV_HINTS } from './diagnostics.js'
-import { parseTreeId, rescueRollback } from './snapshots.js'
+import { parseTreeId } from './snapshots.js'
 import type { Runtime, SharedState, ErrorRecord, StoreInfo } from '../types/state.js'
 import type { ResolvedConfig } from '../types/config.js'
 import type { SnapshotsApi } from './snapshots.js'
@@ -24,7 +24,7 @@ export interface RoutesCoreDeps {
   supported: boolean
   enqueue<T>(task: () => Promise<T>): Promise<T>
   agentBusy(sessionId: string | null, root: string | null): boolean
-  rescueRollback: typeof rescueRollback
+  rescueRollback: typeof import('./snapshots.js').rescueRollback
   E: typeof import('./errors.js')
 }
 
@@ -44,7 +44,11 @@ export function createRoutesCore(deps: RoutesCoreDeps) {
       if (root) {
         let store: StoreInfo | null = await rt.resolveStore(root)
         store = await rt.tryUpgradeToHome(root)
-        if (store) await rt.ensureGit(root, store)
+        // 非空断言：resolveStore 恒在 state.stores 写入并返回 store（含降级兜底，
+        // 不返 null），tryUpgradeToHome 只在该 store 存在时返回它——null 不可达。
+        // 保持迁移前控制流：不做守卫跳过（守卫会把「ensureGit 抛错中断 init」的
+        // 旧语义改成静默继续 loadIndex）
+        await rt.ensureGit(root, store!)
         await snaps.loadIndex(root, sessionId)
         await snaps.rebuildOrphans(root, sessionId)
         rt.cleanupLegacy(root)

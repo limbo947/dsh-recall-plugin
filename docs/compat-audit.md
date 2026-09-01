@@ -129,7 +129,7 @@
   opts 即 source session id / anchoring cut 的 event seq / 标题递增开关），文档的
   第三个参数 `childSessionId?` 在契约中不存在；Host 侧 `dsh-session` 只有
   `CreateSessionOptions.seed`（种子回放），无 fork 方法。本项目撤回走
-  `fork({ sessionId, atSeq })` 对象形态（src/client/recall-node.js），与契约逐字
+  `fork({ sessionId, atSeq })` 对象形态（src/client/recall-node.ts），与契约逐字
   匹配，探针钉住。
 
 ### I7 archiveSession 语义：归档 = 从分组表面隐藏（F1 lineage 链断裂根因）
@@ -270,7 +270,7 @@
 ### I22 Client 查 snapshot-info 前必须等 ensureInit 回调
 - **依赖的官方行为**：Host 端 init 要跑数条 shell（建仓/loadIndex），是异步预热；快照捕获
   也是异步的。client 侧「单槽缓存 init promise + 有界轮询」是自有时序约定（非官方字段）。
-- **出处**：`src/client/util.js` ensureInit / `src/client/recall-node.js` UserRecallNode 轮询（**非官方耦合**：项目自有时序约定，dsh 升级复查不涉及；改 client 轮询时复核）。
+- **出处**：`src/client/util.ts` ensureInit / `src/client/recall-node.ts` UserRecallNode 轮询（**非官方耦合**：项目自有时序约定，dsh 升级复查不涉及；改 client 轮询时复核）。
 - **探针/单测**：无直接探针；冒烟「冷启动撤回按钮出现」覆盖。
 - **失效症状**：冷启动误判 `has:false` 且不重试，撤回按钮永不出现。
 - **复查动作**：确认 init 仍为每会话一次的异步预热；轮询窗口/次数与快照耗时匹配。
@@ -415,7 +415,7 @@
 - **失效症状**：本插件 UI 全部消失（按钮 + 设置卡），无报错无声息；Host 半
   API 正常（`/api/recall/*` 200）——「Host 活 Client 死」即此症。
 - **复查动作**：dsh 升级后核对 guard.ts 的门禁语义是否放宽（get 恢复跨 scope
-  或声明要求变化）；插件 `src/client/entry.js` 的 inject 清单与官方 client 域
+  或声明要求变化）；插件 `src/client/entry.ts` 的 inject 清单与官方 client 域
   服务清单比对（声明缺失服务会让 fiber 静默不启动——styles 已从声明剔除、
   conversation 走 get 探测）；0.1.2 之后若 conversation 成为两端稳定服务，
   可重新评估是否进 inject；guard 的 slots register 优先级覆盖策略若改回尊重

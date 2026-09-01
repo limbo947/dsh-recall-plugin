@@ -363,7 +363,9 @@ export function buildRecallNode(
               api<unknown>('lineage-record', { childId, parentId: sessionId }).catch(() => {})
               // 回退前的原会话归档（可关）：只是从列表隐藏、可恢复
               if (pluginConfig.archiveOriginal && workspacesSvc && typeof workspacesSvc.archiveSession === 'function') {
-                Promise.resolve(workspacesSvc.archiveSession(sessionId as string)).catch(() => {})
+                // 归档失败不阻断撤回主流程（reject 吞掉）；与迁移前一致直接
+                // .catch——非 thenable 返回是官方契约漂移，当场暴露而非静默
+                workspacesSvc.archiveSession(sessionId as string).catch(() => {})
               }
             } else {
               chatError = '未返回新会话'

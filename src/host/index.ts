@@ -445,8 +445,10 @@ export function apply(ctx: HostContext, config: ResolvedConfig) {
     for (const [cwd, sessionId] of warmupRoots) {
       Promise.resolve(rt.resolveStore(cwd))
         .then(() => rt.tryUpgradeToHome(cwd))
-        // store 缺失时跳过 ensureGit：原实现 store.git 会抛错并被下方 catch 吞掉，语义等价
-        .then((store) => (store ? rt.ensureGit(cwd, store) : null))
+        // 非空断言：resolveStore 恒返 store，null 不可达——保持迁移前控制流
+        // （若为 null 由 ensureGit 内抛错、下方 catch 吞掉并跳过后续预热步骤；
+        // 守卫式跳过会让 loadIndex/rebuildOrphans/cleanupLegacy 继续执行，非旧语义）
+        .then((store) => rt.ensureGit(cwd, store!))
         .then(() => snaps.loadIndex(cwd, sessionId))
         .then(() => snaps.rebuildOrphans(cwd, sessionId))
         .then(() => rt.cleanupLegacy(cwd))

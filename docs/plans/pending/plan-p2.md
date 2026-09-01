@@ -15,7 +15,7 @@
 
 ### 任务分解
 
-1. **Esc 关闭**（[src/client/recall-node.ts](../../../src/client/recall-node.ts) `recallPanel`，L285 起）
+1. **Esc 关闭**（[src/client/recall-node.ts](../../../src/client/recall-node.ts) `recallPanel`，L86 起）
    - 面板挂载时 `document.addEventListener('keydown', handler, true)`（**capture 阶段**，先于 composer 的全局快捷键拿到 Esc——dsh-rewind 实证必须 capture 才能从输入框偷键），卸载时移除（React 卸载成对清理，AGENTS.md 半 UI 约束）。
    - Esc 仅在面板打开（stage 为 confirm）时拦截；done/error 阶段不拦（让用户正常关闭）。
 2. **Enter 确认**

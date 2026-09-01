@@ -16,7 +16,7 @@ import type { StoreDumpInfo } from './dump-parse.js'
 import type { SnapshotsApi, RollbackResult } from './snapshots.js'
 import type { MaintenanceApi } from './maintenance.js'
 import type { SessionInfoApi } from './session-info.js'
-import type { ManageListItem, ManageResponse, ManageArgs, ExcludeSetArgs, ExcludeSetResponse } from '../types/api.js'
+import type { ManageListItem, ManageResponse, ManageArgs, ExcludeGetResponse, ExcludeSetArgs, ExcludeSetResponse, ConfigGetResponse, ConfigSetResponse, ConfigResetResponse } from '../types/api.js'
 import type { titleFromEvents, messageTextFromEvents } from './session-info.js'
 
 export interface RoutesManageDeps {
@@ -274,7 +274,7 @@ export function createRoutesManage(deps: RoutesManageDeps) {
   }
 
   return {
-    'exclude-get': async () => {
+    'exclude-get': async (): Promise<ExcludeGetResponse> => {
       // 设置页「撤回设置」标签的配置读取。不支持平台照常短路：Client
       // 显示不可用提示而不是空白表单，与 init 的 notice 语义对齐。
       if (!supported) return { ok: false, unsupported: true }
@@ -322,7 +322,7 @@ export function createRoutesManage(deps: RoutesManageDeps) {
 
     // 设置页「插件配置」卡片读配置：resolved 全量值 + 用户已覆盖字段 + env
     // 锁定字段（环境变量优先级最高）+ 可写性（只读 provider 禁存）。
-    'config-get': async () => {
+    'config-get': async (): Promise<ConfigGetResponse> => {
       const envLocks = {
         gcSnaps: Boolean(process.env && process.env.DSH_RECALL_GC_SNAPS),
         gcHours: Boolean(process.env && process.env.DSH_RECALL_GC_HOURS),
@@ -359,7 +359,7 @@ export function createRoutesManage(deps: RoutesManageDeps) {
 
     // 设置页「插件配置」卡片存配置：白名单字段 + 类型清洗后经 settings.update
     // 写进用户层，watch 链路把新值热更新进 cfg，无需重启。
-    'config-set': async (args: unknown): Promise<{ ok: boolean; code?: string; message?: string }> => {
+    'config-set': async (args: unknown): Promise<ConfigSetResponse> => {
       const patch = args && (args as { patch?: unknown }).patch && typeof (args as { patch?: unknown }).patch === 'object'
         ? (args as { patch: Record<string, unknown> }).patch
         : {}
@@ -573,7 +573,10 @@ export function createRoutesManage(deps: RoutesManageDeps) {
         }
         if (!store) return { ok: false, code: E.RECALL_NO_SNAPSHOT, message: '该快照不存在' }
         const finalStore = store
-        const finalRoot = snapRoot
+        // 非空断言：store 非 null 只能来自 resolveStore(snapRoot)（snapRoot 非 null
+        // 才会尝试）或 locateSnapshotOnDisk（同时给出 root: string）——两条路径
+        // store 非 null 时 snapRoot 必非 null
+        const finalRoot = snapRoot!
         await enqueue(async () => {
           if (state.gitExe) {
             await rt.runShell(rt.scripts.purgeTagsScript(finalStore, state.gitExe, ['snap-' + id]), { timeoutMs: 120000, stdoutMaxBytes: 4096 })
@@ -581,11 +584,11 @@ export function createRoutesManage(deps: RoutesManageDeps) {
           // 兜底路径到这里时内存可能还没载入过该 root 的索引——先 loadIndex
           // 补齐内存视图，再删目标条目后重写，避免用残缺内存覆盖同 store
           // 其余磁盘快照。
-          if (finalRoot && !state.indexLoaded.has(finalRoot)) {
+          if (!state.indexLoaded.has(finalRoot)) {
             try { await snaps.loadIndex(finalRoot, sessionId) } catch (error) { /* 载入失败照常重写，退化为旧行为 */ }
           }
           state.snapshots.delete(id)
-          await snaps.saveIndex(finalRoot!, sessionId)
+          await snaps.saveIndex(finalRoot, sessionId)
           // 列表缓存失效：Client 删除后会立刻 refresh，必须看到最新状态
           listCache.items = null
           usageCache.payload = null
@@ -640,7 +643,7 @@ export function createRoutesManage(deps: RoutesManageDeps) {
     // 设置页「插件配置」卡片恢复默认：整段清空 user 层回组合 base——官方
     // settings RPC 的 replace 明确是「restoration/reset 路径」。老版本服务
     // 没有 replace 时降级 settings.update 写 DEFAULTS。
-    'config-reset': async () => {
+    'config-reset': async (): Promise<ConfigResetResponse> => {
       let settings: SettingsService | null | undefined = null
       try { settings = ctx.get<SettingsService>('settings') } catch (error) { settings = null }
       if (!settings || typeof settings.update !== 'function') {

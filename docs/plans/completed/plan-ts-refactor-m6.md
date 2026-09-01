@@ -89,11 +89,13 @@ M1 临时 `// @ts-nocheck` 清单（host 侧剩余文件）随各自文件迁移
 
 ### strict 关键处置（每处均行为等价，diff 红线复核通过）
 
-- `gitExe: string | null` → 脚本调用处 `|| ''`（psq(null) 与 psq('') 同为空串，运行语义不变）
+- `gitExe: string | null` → 脚本调用处 `|| ''`：等价依据是 ensureGit 前置拦截使 null 不可达——即便走到，旧代码插值 `'null'`（psq 不特殊处理 null）与新代码 `''` 都只是必败命令的文案差异，不改变结果。（复审修订：原论证「psq(null) 与 psq('') 同为空串」有误，特此更正）
 - store 可空路径：`state.stores.get(root) || null` + 守卫 continue（原 JS 已是守卫语义）
 - errBody/rescueError/error.message 读取：`as { message?: string } | null | undefined` 断言（未命中保持 String(error) 原文）
 - `resolvePosixHomeBase` 参数解构外提（deps/inputs 两参显式化，行为等价）
-- `liveMessageTextFast(sessionId || '', id)` 等调用点补 `|| ''`（sessionId 为 null 时原 JS 里 String 化亦为空，行为等价）
+- `liveMessageTextFast(sessionId || '', id)` 等调用点补 `|| ''`：等价依据是 Map 键 `"null\0id'`（旧代码 String 化拼接）与 `"\0id"` 同样查无此键、走同一兜底路径。（复审修订：原论证「String 化亦为空」有误——String(null) 是 "null"，特此更正）
+- 三处控制流守卫经复审（2026-09-02）回改为非空断言 + 注释，保持迁移前控制流：routes-core init 的 `ensureGit(root, store!)`、index 预热链的 `ensureGit(cwd, store!)`、routes-manage 删除分支的 `finalRoot = snapRoot!`。原 `if (store)`/`finalRoot &&` 守卫会把「null 时 ensureGit 内抛错中断、后续步骤跳过」的旧语义改为静默继续，虽因 resolveStore 恒返 store 而不可达，仍按「禁改运行时行为」红线回改
+- routes-core 的 `rescueRollback` 经复审改为 `typeof import('./snapshots.js').rescueRollback` 类型查询（原运行时导入仅为 typeof 服务，产物留死导入并迫使解构改名 rescueRollback2）
 
 ### 验收证据
 

@@ -96,3 +96,7 @@ M7 完成（代码终态）。
 2. 契约零变化：package-layout / test:probe / verify:host / cordis.patch.yml 全绿（见 commit 验证）；
 3. 工程质量：`npm run typecheck` 全绿、`@ts-ignore` 零残留；
 4. 文档一致：任务 1–6 完成，`grep -rn "lib/" docs/ AGENTS.md` 无指向源码的残留引用（剩余引用均为产物语义或官方包路径）。
+
+### 复审补录（2026-09-02）
+
+任务 2 的核对口径是 `grep "lib/"` + src/host 路径，漏了迁移前就存在、指向 `src/client/*.js` 旧扩展名的引用与两处行号漂移，复审发现后已修：`dsh-contract-verify.md`（recall-node.js/app.js 改 .ts、titles 端点行号 L390-413 → L428 起）、`compat-audit.md`（recall-node.js ×2/util.js/entry.js 改 .ts）、`plan-p2.md`（recallPanel 行号 L285 → L86）。教训入库：今后源码路径类核对应同时覆盖「目录迁移」与「扩展名变化」两种模式，行号引用在迁移类 commit 后必须重核。

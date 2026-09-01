@@ -93,6 +93,10 @@ esbuild 对 client 源码（含类型擦除后）重打包可能产生一次性�
 - client-contract.ts 的 SlotEntryOptions 实测修正为 `{ options: { key?, priority? } }`（slots.entries 返回包装对象）；ClientSessionsService 补 `list?: { getSnapshot(): { byId? } }`（settings-cards 切换版本会话探测）。
 - 临时批量补丁脚本（_tmp-m7-*.mjs）执行后已删除。
 - client.js 产物 diff（M6-2 之后 + M7 入口 .ts 切换）为两段一次性重建的合并：均与行为无关（类型擦除、import type 移除、esbuild 确定性重建）。
+- 复审修订（2026-09-02）：
+  - api-contracts.test.ts 补齐 client 侧双向绑定（12 端点 × 双向互赋值断言）；routes-manage 的 exclude-get/config-get/config-reset 随补标注声明响应类型，config-set 内联返回类型收紧为 `ConfigSetResponse`——routes-manage 全端点与 routes-core 对齐「响应接 types/api.ts」
+  - client-contract 的 `archiveSession` 收紧为 `Promise<unknown>`，recall-node 调用点回改为直接 `.catch`（去掉 `Promise.resolve` 防御性包装，恢复迁移前行为：非 thenable 返回属官方契约漂移，当场暴露而非静默吞掉）
+  - settings-cards ConfigForm 提前返回改 `!draft || !baseline` 一并收窄（draft/baseline 同生同灭），渲染区四处 `baseline!` 非空断言移除
 
 ## 冒烟记录
 
