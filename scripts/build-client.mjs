@@ -27,7 +27,7 @@ import { fileURLToPath } from 'node:url'
 const here = path.dirname(fileURLToPath(import.meta.url))
 const root = path.join(here, '..')
 const outfile = path.join(root, 'lib', 'client.js')
-const entry = path.join(root, 'src', 'client', 'entry.js')
+const entry = path.join(root, 'src', 'client', 'entry.ts')
 
 await build({
   entryPoints: [entry],

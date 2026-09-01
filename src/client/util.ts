@@ -6,13 +6,32 @@
  * 提示节流），由 buildUtil() 工厂生产，避免模块级可变状态（HMR 假设）。
  */
 
+import type { ManageListItem } from '../types/api.js'
+
+// React 以参数逐层注入（同形态复刻的依赖注入形态）：参数类型即 React 全量
+// 命名空间类型（@types/react 是唯一用途，import type 运行时零依赖）
+export type ReactApi = typeof import('react')
+
+// 树形结构（buildTree 产出：工作区 → 会话 → 快照三级）
+export interface TreeWorkspace {
+  root: string | null
+  name: string
+  sessions: TreeSession[]
+}
+export interface TreeSession {
+  root: string | null
+  sessionId: string | null
+  title: string | null
+  items: ManageListItem[]
+}
+
 // 消息时间：当天只显示时分，跨天显示月/日 时分
-export function clockText(ms) {
+export function clockText(ms: unknown): string {
   try {
     // time 字段缺失或非法时返回空串：Invalid Date 不会 throw，
     // 不拦会渲染出 "NaN/NaN NaN:NaN" 这样的坏时间戳
-    if (!ms || isNaN(new Date(ms).getTime())) return ''
-    const d = new Date(ms)
+    if (!ms || isNaN(new Date(ms as number | string).getTime())) return ''
+    const d = new Date(ms as number | string)
     const now = new Date()
     const sameDay = d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth() && d.getDate() === now.getDate()
     const hh = String(d.getHours()).padStart(2, '0')
@@ -24,16 +43,17 @@ export function clockText(ms) {
 }
 
 // 字节大小展示：KB/MB/GB 边界与格式
-export function sizeText(bytes) {
-  if (!bytes || bytes <= 0) return '0 MB'
-  if (bytes < 1048576) return (bytes / 1024).toFixed(0) + ' KB'
-  if (bytes < 1073741824) return (bytes / 1048576).toFixed(1) + ' MB'
-  return (bytes / 1073741824).toFixed(2) + ' GB'
+export function sizeText(bytes: unknown): string {
+  const n = Number(bytes)
+  if (!bytes || n <= 0) return '0 MB'
+  if (n < 1048576) return (n / 1024).toFixed(0) + ' KB'
+  if (n < 1073741824) return (n / 1048576).toFixed(1) + ' MB'
+  return (n / 1073741824).toFixed(2) + ' GB'
 }
 
 // ConfigForm 的字节↔MB 换算：持久化与 schema 都是字节，只在 display/input
 // 层换算成人工友好的 MB 小数；round 2 位去尾零，避免默认值裸奔成一长串
-export function bytesToMb(bytes) {
+export function bytesToMb(bytes: unknown): string {
   const n = Number(bytes)
   if (!Number.isFinite(n) || n <= 0) return ''
   return String(Math.round((n / 1048576) * 100) / 100)
@@ -41,29 +61,44 @@ export function bytesToMb(bytes) {
 
 // 把扁平列表组装成树（工作区 → 会话 → 快照三级）。同一快照只属于一个
 // 工作区/会话，root 或 sessionId 缺失时归入「未知」节点，避免行凭空消失。
-export function buildTree(list) {
-  const workspaces = new Map()
+// 构建期会话以 Map 暂存（按键快速归组），收尾统一转数组供渲染。
+export function buildTree(list: ManageListItem[] | null | undefined): TreeWorkspace[] {
+  const workspaces = new Map<string, { root: string | null; name: string; sessions: Map<string, TreeSession> }>()
   for (const it of list || []) {
     const rootKey = it.root || 'unknown-root'
     if (!workspaces.has(rootKey)) workspaces.set(rootKey, { root: it.root || null, name: it.workspace || '未知工作区', sessions: new Map() })
-    const ws = workspaces.get(rootKey)
+    const ws = workspaces.get(rootKey)!
     const sidKey = it.sessionId || 'unknown-session'
     if (!ws.sessions.has(sidKey)) ws.sessions.set(sidKey, { root: ws.root, sessionId: it.sessionId || null, title: it.sessionTitle || null, items: [] })
-    ws.sessions.get(sidKey).items.push(it)
+    ws.sessions.get(sidKey)!.items.push(it)
   }
-  const wsList = Array.from(workspaces.values())
+  const wsList: TreeWorkspace[] = Array.from(workspaces.values()).map((ws) => ({ root: ws.root, name: ws.name, sessions: Array.from(ws.sessions.values()) }))
   wsList.sort((a, b) => (a.name || '').localeCompare(b.name || ''))
   for (const ws of wsList) {
-    ws.sessions = Array.from(ws.sessions.values())
     ws.sessions.sort((a, b) => (a.title || '').localeCompare(b.title || ''))
     for (const s of ws.sessions) s.items.sort((a, b) => (b.time || 0) - (a.time || 0))
   }
   return wsList
 }
 
-export function buildUtil() {
+// buildUtil 工厂产出（各组件依赖注入消费面；api 的返回类型随调用点泛型推断）
+export interface UtilApi {
+  api<T = unknown>(name: string, args?: unknown): Promise<T>
+  messageFor(res: unknown, fallback: string): string
+  showNotice(kind: string, text: string): void
+  showThrottledToast(text: string): void
+  ensureInit(sessionId: string | null | undefined): Promise<unknown>
+  clockText(ms: unknown): string
+  writeClipboard(text: string): Promise<boolean>
+  sizeText(bytes: unknown): string
+  bytesToMb(bytes: unknown): string
+  buildTree(list: ManageListItem[] | null | undefined): TreeWorkspace[]
+  pluginConfig: { refillDraft: boolean; archiveOriginal: boolean }
+}
+
+export function buildUtil(): UtilApi {
   // Host HTTP API（动态插件的 harness RPC 在此换成 fetch 调用）
-  function api(name, args) {
+  function api<T = unknown>(name: string, args?: unknown): Promise<T> {
     return fetch('/api/recall/' + name, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
@@ -73,25 +108,28 @@ export function buildUtil() {
 
   // 机器码 → 人文案映射（H3）：host 端点 code 是线上契约（machine），
   // client 这里做展示层文案（human），未命中回退 host 的 message 兜底。
-  const CODE_TEXT = {
+  const CODE_TEXT: Record<string, string> = {
     STALE: '预览后项目文件发生了变化，请重新预览确认',
     AGENT_BUSY: 'Agent 正在运行中，请先停止后再撤回',
     NO_SNAPSHOT: '该消息没有可用的项目快照',
     NO_STORE: '快照存储不可用',
     ROLLBACK_FAILED: '回退失败',
   }
-  function messageFor(res, fallback) {
+  function messageFor(res: unknown, fallback: string): string {
     if (!res) return fallback
-    const code = res && res.code
-    if (code && CODE_TEXT[code]) return CODE_TEXT[code]
-    return (res && (res.message || res.error)) || fallback
+    const code = (res as { code?: unknown }).code
+    if (code && CODE_TEXT[String(code)]) return CODE_TEXT[String(code)]
+    // message/error 均为 unknown（端点返回形状宽松），取首个 truthy 并 String 化
+    const m = (res as { message?: unknown }).message
+    const e = (res as { error?: unknown }).error
+    return String(m || e || fallback)
   }
 
   // 降级提示：每个种类每次页面加载只弹一次（Set 去重），避免切会话时反复
   // 打扰。纯 DOM 直插（与剪贴板同样的零依赖思路），7 秒后自动淡出。
-  const noticeShown = new Set()
+  const noticeShown = new Set<string>()
   // toast 挂载本体：两类提示（降级/快照反馈）共用的纯 DOM 实现
-  function mountToast(text) {
+  function mountToast(text: string): void {
     if (typeof document === 'undefined') return
     try {
       const el = document.createElement('div')
@@ -117,7 +155,7 @@ export function buildUtil() {
       }
     } catch (e) { /* 提示失败不影响主流程 */ }
   }
-  function showNotice(kind, text) {
+  function showNotice(kind: string, text: string): void {
     if (noticeShown.has(kind)) return
     noticeShown.add(kind)
     mountToast(text)
@@ -126,8 +164,8 @@ export function buildUtil() {
   // 会在持续故障期间随每条消息反复发生——按「文本前缀 + 时间窗」节流，
   // 同一故障 10 分钟内至多打扰一次；不同错误各自独立计数。Map 规模封顶后
   // 整体清空：提示是尽力而为的可见性，不是需要精确保留的状态。
-  const toastLastShown = new Map()
-  function showThrottledToast(text) {
+  const toastLastShown = new Map<string, number>()
+  function showThrottledToast(text: string): void {
     const key = String(text).slice(0, 80)
     const now = Date.now()
     if (now - (toastLastShown.get(key) || 0) < 10 * 60 * 1000) return
@@ -143,15 +181,16 @@ export function buildUtil() {
   // init 顺带下发插件行为开关（refillDraft 等），存进 pluginConfig 供撤回
   // 执行链读取——设置页改配置 + 重启后随下一次 init 刷新。
   const pluginConfig = { refillDraft: true, archiveOriginal: true }
-  const initMap = new Map()
-  function ensureInit(sessionId) {
+  const initMap = new Map<string, Promise<unknown>>()
+  function ensureInit(sessionId: string | null | undefined): Promise<unknown> {
     if (!sessionId) return Promise.resolve()
     const cached = initMap.get(sessionId)
     if (cached) return cached
-    const done = api('init', { sessionId }).then((res) => {
+    const done = api<import('../types/api.js').InitResponse>('init', { sessionId }).then((res) => {
       if (res && res.config && typeof res.config === 'object') {
-        if (typeof res.config.refillDraft === 'boolean') pluginConfig.refillDraft = res.config.refillDraft
-        if (typeof res.config.archiveOriginal === 'boolean') pluginConfig.archiveOriginal = res.config.archiveOriginal
+        const cfg = res.config as { refillDraft?: unknown; archiveOriginal?: unknown }
+        if (typeof cfg.refillDraft === 'boolean') pluginConfig.refillDraft = cfg.refillDraft
+        if (typeof cfg.archiveOriginal === 'boolean') pluginConfig.archiveOriginal = cfg.archiveOriginal
       }
       const notice = res && res.notice
       if (notice && notice.unsupported) {
@@ -173,7 +212,7 @@ export function buildUtil() {
   }
 
   // 复制按钮走浏览器剪贴板；无 primitives 依赖，直接调用并带降级
-  function writeClipboard(text) {
+  function writeClipboard(text: string): Promise<boolean> {
     try {
       if (navigator && navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
         return navigator.clipboard.writeText(text).then(() => true, () => false)

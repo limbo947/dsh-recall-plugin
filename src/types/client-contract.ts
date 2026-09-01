@@ -99,6 +99,8 @@ export interface ChatNodeProps {
 export interface ClientSessionsService {
   fork(opts: { sessionId: string; atSeq?: number; increaseTitle?: boolean }): Promise<string>
   open(sessionId: string): unknown
+  // settings-cards 的「切换版本会话」探测：官方会话列表快照（{ byId }）
+  list?: { getSnapshot(): { byId?: Record<string, unknown> } }
 }
 
 export interface ClientWorkspacesService {
@@ -128,9 +130,10 @@ export interface StylesService {
 
 // ---- slots 服务（keyed 注册：负值 priority 冲突递减重试，I1）----
 
+// slots.entries 返回的条目形状：{ options: { key, priority } }（冲突探测读
+// entry.options.key / entry.options.priority，见 app.ts nextShadowPriority）
 export interface SlotEntryOptions {
-  key?: string
-  priority?: number
+  options?: { key?: string; priority?: number }
 }
 
 export interface SlotsService {

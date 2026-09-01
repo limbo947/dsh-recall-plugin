@@ -25,19 +25,18 @@
  *   （声明缺失服务会让 fiber 永久 pending），用 ctx.get 可选探测 + <style> 降级。
  */
 
-// @ts-nocheck —— TS 迁移 M1 临时豁免：window.__ModuleLoader__ 全局在
-// M3 client-contract.ts 的 declare global 建档（52 slot + loader 契约），
-// M7 entry.ts 迁移时随全局类型接入移除本行。
 import { createApp } from './app.js'
+import type { ClientPluginObject } from '../types/client-contract.js'
+import type { ReactApi } from './util.js'
 
 window.__ModuleLoader__.load({
   id: 'dsh-recall-plugin',
   factory: (require) => {
-    const React = require('react')
+    const React = require('react') as ReactApi
     return {
       name: 'dsh-recall-plugin',
       inject: ['slots', 'sessions', 'workspaces', 'timer'],
       apply: createApp(React)
-    }
+    } as ClientPluginObject
   }
 })

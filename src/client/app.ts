@@ -11,19 +11,22 @@ import { CSS } from './css.js'
 import { buildUtil } from './util.js'
 import { buildRecallNode } from './recall-node.js'
 import { buildSettingsCards } from './settings-cards.js'
+import type { ReactApi, UtilApi } from './util.js'
+import type { ClientContext, ClientSessionsService, ClientWorkspacesService, SlotsService, SlotEntryOptions, StylesService } from '../types/client-contract.js'
 
-export function nextShadowPriority(entries, key) {
+export function nextShadowPriority(entries: SlotEntryOptions[] | null | undefined, key: string): number {
   let priority = -1
   for (const entry of Array.isArray(entries) ? entries : []) {
     if (!entry || !entry.options || entry.options.key !== key) continue
-    const occupied = Number.isFinite(entry.options.priority) ? entry.options.priority : 0
+    const p = entry.options.priority
+    const occupied = typeof p === 'number' && Number.isFinite(p) ? p : 0
     if (occupied <= priority) priority = occupied - 1
   }
   return priority
 }
 
-export function createApp(React) {
-  return function apply(ctx) {
+export function createApp(React: ReactApi) {
+  return function apply(ctx: ClientContext): void {
     // 0.1.2 起 client runner 用 guard facade 包 ctx：只有插件对象 inject 数组
     // 声明过的服务才可经 ctx.<name> 属性访问（跨 scope 解析由 cordis inject
     // 机制完成）；ctx.get() 在新作用域下拿不到 slots 等服务，会静默拿到
@@ -38,7 +41,7 @@ export function createApp(React) {
     // styles 服务 0.1.2 已不存在（CSS 由官方打包管道按 materialize 注入，
     // 本插件是手写常量注入），保留 get 探测 + <style> 降级——get 对缺失服务
     // 安全返回 undefined，不会像未声明的属性访问那样抛守卫错误。
-    const stylesSvc = ctx.get('styles')
+    const stylesSvc = ctx.get<StylesService>('styles')
     if (stylesSvc && typeof stylesSvc.insert === 'function') {
       stylesSvc.insert(CSS)
     } else if (typeof document !== 'undefined') {

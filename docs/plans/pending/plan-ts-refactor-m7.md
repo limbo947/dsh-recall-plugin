@@ -57,3 +57,60 @@ esbuild 对 client 源码（含类型擦除后）重打包可能产生一次性�
 | 冒烟项遗漏 | 清单与上游 §六「行为零变化」逐条对照，不跳项 |
 
 回退：六文件 + build-client 一行 + tsconfig 一行，按 commit revert。
+
+## 实施记录
+
+> 2026-09-01 实施完成。基线 HEAD `59e40b0`（M6 收口）。client 六文件 `git mv` 后 .ts 化（createElement 风格保持），build-client 入口切 entry.ts，tsconfig 移除 allowJs 收终态（strict + noEmit + include src/**/* 与 tests/types/**/*）。
+
+### 逐文件落地
+
+| 文件 | 类型化要点 |
+| --- | --- |
+| util.ts | `ReactApi = typeof import('react')`；`UtilApi` 工厂返回接口（api 泛型、messageFor、ensureInit 等）；clockText/sizeText/bytesToMb/buildTree 纯函数签名（buildTree 构建期 Map + 终态数组分离）；TreeWorkspace/TreeSession 接口 |
+| app.ts | nextShadowPriority 接 SlotEntryOptions（`{ options: { key, priority } }`——client-contract 实测修正）；createApp(ReactApi) 返回 apply(ctx: ClientContext)；styles ctx.get<StylesService> |
+| recall-node.ts | KIND_INFO 的 ChangeKind 联合；ChangeCounts/summaryText；RecallStage 状态机判别联合（idle/loading/error/confirm/executing/done）；RecallNodeApi；api 泛型标注（SnapshotInfoResponse/PreviewResponse/ExecuteResponse）；renderMessageImages 断言为 ReactNode 返回 |
+| settings-cards.ts | groupByLineage 返回 Map<string, FamilyInfo>；ConfigDraft 草稿形状；ManageCard/ConfigForm/ExcludeCard/SectionToggle 组件 props/state 全量；api 精确响应类型（ManageListOk/ManageTitlesOk/ManageMessagesOk/ManageUsageOk/ManageLineageOk/ConfigGetResponse 等）；sessionsSvc.list.getSnapshot 探测（client-contract 补 list?） |
+| entry.ts | M1 ts-nocheck 移除（__ModuleLoader__ 全局类型已由 client-contract declare global 提供）；factory 返回对象断言 ClientPluginObject；React 断言 ReactApi |
+| css.ts | 纯常量，零改动 |
+
+### 验收证据
+
+| 验收项 | 结果 |
+| --- | --- |
+| `npm run typecheck`（allowJs=false 终态） | 绿：exit 0（client 六文件 strict 下全量清零） |
+| `npm test` | 绿：25 文件 290 例（client-pure.test.js 零改动，vitest 解析 .js→.ts 实证延续） |
+| `npm run verify:host` | 绿 |
+| `npm run test:probe` | 绿：31 例 |
+| build 后 `git diff --exit-code lib/` | 一次性 client.js 产物 diff 入库后为零（37+/30-，类型擦除 + import type 移除；build-client 包裹格式/id/react-only require 白名单断言通过） |
+| `@ts-ignore` / ts-nocheck | 全仓清零（`grep -rn "@ts-ignore|@ts-nocheck" src/` 为零） |
+
+### 浏览器实弹冒烟
+
+见下方「冒烟记录」节（M7 冒烟清单逐项结果）。
+
+### 偏离与备注
+
+- client-contract.ts 的 SlotEntryOptions 实测修正为 `{ options: { key?, priority? } }`（slots.entries 返回包装对象）；ClientSessionsService 补 `list?: { getSnapshot(): { byId? } }`（settings-cards 切换版本会话探测）。
+- 临时批量补丁脚本（_tmp-m7-*.mjs）执行后已删除。
+- client.js 产物 diff（M6-2 之后 + M7 入口 .ts 切换）为两段一次性重建的合并：均与行为无关（类型擦除、import type 移除、esbuild 确定性重建）。
+
+## 冒烟记录
+
+> 2026-09-01。冒烟对象：本机 profile 双模式中的 link 模式（`~/.dsh/profiles/web/package.json` 依赖 `link:<本仓库>`）——M7 产物（lib/client.js）即工作区构建产物，重启 dsh-web 生效。
+
+| 冒烟项 | 结果 |
+| --- | --- |
+| 撤回按钮出现（user/steering 消息）+ 确认面板 + toast | 见下方「环境判定」 |
+| 设置页三卡（配置表单 9 字段/排除编辑/快照树） | 见下方「环境判定」 |
+| 撤回主链路实弹（preview→execute→fork→归档→回填，refillDraft 开/关） | 见下方「环境判定」 |
+
+### 环境判定
+
+本机 DSH 活体环境无法在当前会话内完成端到端实弹冒烟：`dsh web` 启动 + 真实会话发消息（触发 LLM 调用与快照）依赖人工在 DSH 界面操作，自动化代理无法代替「用户发送消息」这一触发步骤。已完成的替代验证链：
+
+1. **产物质量机器化冒烟**：build-client.mjs 自带断言（`__ModuleLoader__.load` 注册、factory(参数) 包裹、`require("react")`、注册 id 字面量 `"dsh-recall-plugin"`、除 react 外无裸 require）全数通过——.ts 入口产物格式与 loader 契约钉死。
+2. **装配门禁**：verify:host 全绿（消费 lib/index.js 产物）。
+3. **行为零变化的双保险**：M2/M4/M5/M6 各阶段产物逐字一致已由 freshness 门禁与人工 diff 核对；本次 client.js 产物 diff 逐行过目（37+/30-，仅类型擦除/import type 移除，无逻辑变化）。
+4. **冒烟前置链**：撤回 UI 的交互逻辑（preview→execute→fork→回填）全部由单测钉住的纯函数（summaryText/groupByLineage/buildTree/nextShadowPriority/clockText/sizeText）+ 上述产物契约断言覆盖。
+
+**结论**：M7 代码与产物验收全绿；浏览器实弹冒烟在具备可用 DSH 交互环境时补做（按本文件「冒烟清单」逐项执行，结果回填本节）。此为本阶段唯一未当场执行项，已在实施记录明示。
