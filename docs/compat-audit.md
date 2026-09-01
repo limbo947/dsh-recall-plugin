@@ -153,13 +153,13 @@
 
 ### I9 冷启动 sessions.list() 为空：exclude 枚举须叠加 home 容器磁盘兜底
 - **依赖的官方行为**：`ctx.sessions.list()` 是纯内存 Map，冷启动惰性载入常为空。
-- **出处**：官方部分 = `dsh-session/lib/index.js`（SessionStore 纯内存 Map，L1480-1481）；项目部分 = `resolveHomeContainer` 磁盘兜底（lib/store.js，**非官方耦合**——dsh 升级复查不涉及，改 store 代码时复核）。
+- **出处**：官方部分 = `dsh-session/lib/index.js`（SessionStore 纯内存 Map，L1480-1481）；项目部分 = `resolveHomeContainer` 磁盘兜底（src/host/store.ts，**非官方耦合**——dsh 升级复查不涉及，改 store 代码时复核）。
 - **探针/单测**：`tests/probe/api-surface.test.js`（SessionStore 服务名 + 内存 Map 形态断言）+ 冒烟「冷启动设置页可见排除配置」覆盖。
 - **失效症状**：设置页误报「尚未创建快照存储」，exclude 编辑不可见。
 - **复查动作**：读 `dsh-session/lib/index.js` L1480-1481 `SessionStore`——`store` 仍是
   纯内存 Map（注释明示「Persistence is intentionally not implemented here」）、`list()`
   （L1723）仍同步返回该 Map；冷启动为空、依赖持久化插件经 `session/event` 重放填充的
-  语义未变。`resolveHomeContainer` 磁盘兜底路径（本项目 lib/store.js）仍有效。
+  语义未变。`resolveHomeContainer` 磁盘兜底路径（本项目 src/host/store.ts）仍有效。
 
 ### I10 cordis inject 门禁：ctx.<service> 必须在 inject 声明
 - **依赖的官方行为**：cordis 4 要求服务在插件 `inject` 声明才可经 `ctx.xxx` 访问，漏声明
@@ -204,7 +204,7 @@
 ### I14 pwsh 对 native 非零退出不抛：关键命令显式查 $LASTEXITCODE
 - **依赖的官方行为**：PowerShell 的 `$ErrorActionPreference` 不作用于 native 命令，非零
   退出码不抛；不显式检查会「旧索引/空树假成功」。
-- **出处**：`lib/scripts.pwsh.js`（snapshot/diff/rollback/rescue 模板的显式 throw）。
+- **出处**：`src/host/scripts.pwsh.ts`（snapshot/diff/rollback/rescue 模板的显式 throw）。
 - **探针/单测**：`tests/unit/scripts-contract.test.js`（模板结构断言）。
 - **失效症状**：空树假成功（1.7.0 实证）。
 - **复查动作**：新增 pwsh native 命令模板时维持 `$LASTEXITCODE` 检查。
@@ -212,21 +212,21 @@
 ### I15 runShell 失败兜底：g='<store.git>' 赋值约定 + RECALL_CLEANUP 哨兵
 - **依赖的官方行为**：runShell 失败路径从脚本文本提取 `g='<store.git>'` 清孤儿进程与
   stale 锁；清扫脚本带 `RECALL_CLEANUP` 哨兵防递归。
-- **出处**：`lib/store.js` extractGitDir / cleanupAfterGitFailure（**非官方耦合**：项目内约定，dsh 升级复查不涉及；改 runShell 失败兜底时复核）。
+- **出处**：`src/host/store.ts` extractGitDir / cleanupAfterGitFailure（**非官方耦合**：项目内约定，dsh 升级复查不涉及；改 runShell 失败兜底时复核）。
 - **探针/单测**：`tests/unit/scripts-contract.test.js`（STORE_SCRIPTS 的 g= 约定 + 哨兵）。
 - **失效症状**：孤儿 git 持锁 30+ 分钟；清扫脚本自递归。
 - **复查动作**：新增带 store 脚本模板必须维持 g= 赋值；scripts-contract 变红即修。
 
 ### I16 POSIX while 循环体禁用 cond && cmd
 - **依赖的官方行为**：`set -e` 下 `cond && cmd` 条件为假时整条管道退出码 1，杀脚本。
-- **出处**：`lib/scripts.posix.js`（snapshotScript 的 if/fi 用法）。
+- **出处**：`src/host/scripts.posix.ts`（snapshotScript 的 if/fi 用法）。
 - **探针/单测**：`tests/unit/scripts-contract.test.js`（结构断言，间接）。
 - **失效症状**：快照脚本在「无跳过」路径整条退出码 1、set -e 杀脚本。
 - **复查动作**：新增 posix while 循环体一律 if/fi；不回归 cond && cmd。
 
 ### I17 git init <dir>：repo 与 git 是两个路径概念
 - **依赖的官方行为**：`git init <dir>` 把真实 git-dir 建在 `<dir>/.git`。
-- **出处**：`lib/store.js` makeStore（repo=dir/git、git=dir/git/.git）。
+- **出处**：`src/host/store.ts` makeStore（repo=dir/git、git=dir/git/.git）。
 - **探针/单测**：无直接探针；冒烟「中文路径工作区快照/撤回」覆盖。
 - **失效症状**：脚本 `--git-dir` 指向错误路径，快照/回退全失败。
 - **复查动作**：git init 语义为 git 固有行为，无 dsh 升级风险；改 store 布局时复核。
@@ -234,7 +234,7 @@
 ### I18 子进程不继承 DSH_HOME：POSIX home 探测三档回退
 - **依赖的官方行为**：DSH bash 执行器洗刷子进程 DSH_* 变量，用户导出的 DSH_HOME 在
   bash 里通常不可见。
-- **出处**：官方部分 = `dsh-shell-env/lib/index.js`（DSH_ENV_PREFIX 注册表 + RESERVED_BASH_ENV_KEYS 含 DSH_HOME_ENV）；项目部分 = `lib/store.js` posixHomeBaseResolve（**非官方耦合**，改 store 代码时复核）。
+- **出处**：官方部分 = `dsh-shell-env/lib/index.js`（DSH_ENV_PREFIX 注册表 + RESERVED_BASH_ENV_KEYS 含 DSH_HOME_ENV）；项目部分 = `src/host/store.ts` posixHomeBaseResolve（**非官方耦合**，改 store 代码时复核）。
 - **探针/单测**：`tests/probe/api-surface.test.js`（DSH_ENV_PREFIX / RESERVED_BASH_ENV_KEYS / DSH_HOME_ENV 断言）+ 冒烟「POSIX 下快照存对 home」覆盖。
 - **失效症状**：快照存错 home 目录（或降级到项目内）。
 - **复查动作**：读 `dsh-shell-env/lib/index.js`——`DSH_ENV_PREFIX` 注册表与
@@ -245,7 +245,7 @@
 ### I19 快照索引两段式补全：manage list 字段补全 + messageTexts null 缓存
 - **依赖的官方行为**：`sessionQuery.readSession` 冷读整日志解压很贵（10 秒级），快照管理
   列表首屏不等冷标题/消息文本，由 client 异步二次请求补齐。
-- **出处**：`lib/index.js` manage titles/messages 端点 + `lib/client.js`（src/client）两段式（**非官方耦合**：项目内时序约定，dsh 升级复查不涉及；改 manage 端点时复核）。
+- **出处**：`src/host/index.ts` manage titles/messages 端点 + `lib/client.js`（src/client 构建产物）两段式（**非官方耦合**：项目内时序约定，dsh 升级复查不涉及；改 manage 端点时复核）。
 - **探针/单测**：`tests/unit/client-pure.test.js`（buildTree）+ 冒烟「树形展开见标题/消息」。
 - **失效症状**：冷会话标题/消息永不补齐，或无文本消息每次刷新重复解压冷日志。
 - **复查动作**：确认 readSession 契约未变；messageTexts null 也缓存（避免重复冷读）。
@@ -253,7 +253,7 @@
 ### I20 批量删 tag 分块（每 100）：win32 命令行 32767 上限
 - **依赖的官方行为**：DSH pwsh 执行器把命令串作为 `-Command` 单个 argv 元素 spawn，Windows
   命令行 32767 字符上限。
-- **出处**：官方部分 = `dsh-pwsh-local/lib/index.js`（命令串作为单个 argv 元素传 `-Command`）；项目部分 = `lib/index.js` deleteSnapshotsByFilter / `lib/maintenance.js` purgeSession 分块实现（**非官方耦合**，改批量命令时复核）。
+- **出处**：官方部分 = `dsh-pwsh-local/lib/index.js`（命令串作为单个 argv 元素传 `-Command`）；项目部分 = `src/host/index.ts` deleteSnapshotsByFilter / `src/host/maintenance.ts` purgeSession 分块实现（**非官方耦合**，改批量命令时复核）。
 - **探针/单测**：`tests/probe/api-surface.test.js`（-Command 单 argv 断言）+ 冒烟「长历史工作区批量删除」覆盖。
 - **失效症状**：长历史工作区批量删 tag spawn 失败。
 - **复查动作**：读 `dsh-pwsh-local/lib/index.js` L75-78——命令串仍作为**单个 argv 元素**
@@ -278,7 +278,7 @@
 ### I23 manage list 同 id 去重须字段补全（磁盘先占位、内存后补）
 - **依赖的官方行为**：快照列表是「磁盘 dump + 内存缓存」并集，同一 id 可能磁盘先占位
   （root 缺失）、内存后补全；按「首次命中即丢弃」会让节点落「未知工作区」。
-- **出处**：`lib/index.js` manage list 的 push 补全逻辑 / collectAllSnapshotRecords（**非官方耦合**：项目内并集去重实现，dsh 升级复查不涉及；改 manage list 时复核）。
+- **出处**：`src/host/index.ts` manage list 的 push 补全逻辑 / collectAllSnapshotRecords（**非官方耦合**：项目内并集去重实现，dsh 升级复查不涉及；改 manage list 时复核）。
 - **探针/单测**：无直接探针；冒烟「跨工作区快照树形归组正确」覆盖。
 - **失效症状**：树形一级节点落「未知工作区」，批量删除按工作区/会话匹配不到。
 - **复查动作**：确认 store 目录仍是 root 的单向哈希（磁盘反查 root 依赖 root.txt/index）。
@@ -287,23 +287,23 @@
 - **依赖的官方行为**：win32 第三档是 `Join-Path USERPROFILE .dsh`；POSIX 版曾直接用
   裸 `os.homedir()`，两平台第三档布局不一致，快照落 `~/dsh-recall-snapshots` 而非
   `~/.dsh/dsh-recall-snapshots`（issue #11 截图实证）。
-- **出处**：`lib/store.js` selectPosixHomeBase / resolvePosixHomeBase（第三档补 `/.dsh`
-  + 旧容器一次性迁移四态编排）vs `lib/scripts.pwsh.js` homeDirScript；迁移模板
-  `lib/scripts.posix.js` legacyHomeMigrateScript。
+- **出处**：`src/host/store.ts` selectPosixHomeBase / resolvePosixHomeBase（第三档补 `/.dsh`
+  + 旧容器一次性迁移四态编排）vs `src/host/scripts.pwsh.ts` homeDirScript；迁移模板
+  `src/host/scripts.posix.ts` legacyHomeMigrateScript。
 - **探针/单测**：`tests/unit/store-path.test.js`（三分支 + 迁移四态 + 模板形状）。
 - **失效症状**：POSIX 快照落 `~/dsh-recall-snapshots`；改 base 而无迁移时存量用户
   「看不到」历史快照。
 - **复查动作**：改 POSIX home 解析链时核对第三档仍拼 `/.dsh`；legacyHomeMigrateScript
   四态输出未漂移（MIGRATE_OK/OLD_ABSENT/BOTH_PRESENT/MIGRATE_FAIL）；parity SKIP
-  集合三处（store.js checkScriptParity、scripts-contract.test.js）仍含该平台专属导出。
+  集合三处（src/host/store.ts checkScriptParity、scripts-contract.test.js）仍含该平台专属导出。
 
 ### I25 失败清扫分级：心跳 + 新锁保护活跃实例（issue #11 根因治理）
 - **依赖的官方行为**：POSIX `kill -0` / win32 `Get-Process -Id` 探活；`find -mmin` 与
   `.LastWriteTime` 的 mtime 判定；心跳文件内容为「宿主 PID + epoch 秒」ASCII 单行
   （pwsh 侧必须 ascii 编码——utf8 会带 BOM 破坏 POSIX 侧首字段解析）。
-- **出处**：`lib/scripts.pwsh.js` / `lib/scripts.posix.js` killOrphansScript（三级出口
+- **出处**：`src/host/scripts.pwsh.ts` / `src/host/scripts.posix.ts` killOrphansScript（三级出口
   CLEANUP_OTHER_INSTANCE / CLEANUP_SKIPPED_FRESH_LOCK / CLEANUP_DONE）+
-  ensureGitScript/snapshotScript 的 heartbeatBlock 写入 + `lib/store.js`
+  ensureGitScript/snapshotScript 的 heartbeatBlock 写入 + `src/host/store.ts`
   parseCleanupResult / cleanupAfterGitFailure。
 - **探针/单测**：`tests/unit/diagnostics.test.js`（parseCleanupResult + 接线）+
   `tests/unit/scripts-contract.test.js`（出口标记、心跳接线、STALE_LOCK_MIN /
@@ -322,7 +322,7 @@
   且不能加 --literal-pathspecs）；属性变更后裸 add -A 受 stat 缓存影响时序依赖
   地跳过重哈希（racy 复查只覆盖「add 与文件同秒写入」），存量归一化条目需要
   显式 renormalize 迁移。
-- **出处**：`lib/scripts.pwsh.js` / `lib/scripts.posix.js` FIDELITY_ATTRS 常量 +
+- **出处**：`src/host/scripts.pwsh.ts` / `src/host/scripts.posix.ts` FIDELITY_ATTRS 常量 +
   ensureGitScript 的 info/attributes 固化 + snapshotScript 的 attrsMigrateBlock
   （一次性 renormalize，标记文件 attrs-v1.stamp，失败不 throw 保快照主流程）。
 - **探针/单测**：`tests/unit/scripts-contract.test.js`（两侧常量逐字同值、固化行、
@@ -433,7 +433,7 @@
   （entry 为组合 base、hooks 为 setSource/onChange/validate）。
 - **探针/单测**：无静态探针（import 到不存在的命名导出会直接 SyntaxError，探针
   读 .d.ts 也不覆盖）；`verify:host` 装配门禁在升级后必红并给出此症状——插件
-  `lib/index.js` 静态 import 即崩。已做双版本兼容分支
+  `src/host/index.ts` 静态 import 即崩。已做双版本兼容分支
   （`typeof dshSettings.installSettingsSection === 'function'` 走旧函数，否则走
   `ctx.inject(['settings'])` + `installSection`），verify-host 桩补 installSection。
 - **失效症状**：插件 Host 半启动即崩——SyntaxError `does not provide an export

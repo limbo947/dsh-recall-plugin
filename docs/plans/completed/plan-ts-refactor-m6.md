@@ -1,6 +1,6 @@
 # TS 迁移 M6：工厂与接线层 .ts 化 + strict 全量
 
-> 状态：待实施 ｜ 上游文档：[plan-ts-refactor.md](./plan-ts-refactor.md) ｜ 阶段：M6/8
+> 状态：已完成（2026-09-01 实施）｜ 上游文档：[plan-ts-refactor.md](./plan-ts-refactor.md) ｜ 阶段：M6/8
 >
 > 一句话：六个工厂/装配文件类型化，tsconfig 收紧 strict 全量，host 侧类型化收官。
 

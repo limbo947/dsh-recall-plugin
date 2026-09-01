@@ -21,7 +21,7 @@
 
 ### 候选 A：`sessionQuery.readTitleSnapshots` —— 冷会话标题官方通道（建议未来落地）
 
-**现状**：`../lib/routes-manage.js` titles 端点（L390-413）自研「`readSession` 整日志解压 + `titleFromEvents` 折标题 + `runLimited` 并发 4」。
+**现状**：`../src/host/routes-manage.ts` titles 端点（L390-413）自研「`readSession` 整日志解压 + `titleFromEvents` 折标题 + `runLimited` 并发 4」。
 
 **官方契约（npm 0.1.2-alpha.2 产物实证）**：
 
@@ -72,7 +72,7 @@ interface TurnTailOwnerProps { turn: TurnLocation; seq: number; openFile(path: s
 | `sessionQuery.traceSession` | 基于 `listSessions` 目录级 header，不含 fork 关系（I7 归档会话仅从分组表面隐藏）；不能替代插件 lineage.json（F1） |
 | `conversation.chat.assistant-actions` | list slot，只服务**助手**消息（owner 仅 `{ messageId }`）；插件撤回 user 消息 |
 | `sessionQuery.filterEvents/listEvents/readSurface` | `scanCutSeq` 读**内存 live 会话**事件（`sessions.get`），不涉及冷日志解压 |
-| `agents.get/isOwnedBy` | `agentBusy`（`../lib/index.js`）已有 `list` + `get` 双分支覆盖运行态判定 |
+| `agents.get/isOwnedBy` | `agentBusy`（`../src/host/index.ts`）已有 `list` + `get` 双分支覆盖运行态判定 |
 | webServer gzip（0.1.2-alpha.2 新增） | Host 配置层（默认 none），插件不可控 |
 
 ## 四、对 dsh-contract.md 的补充提醒
@@ -85,7 +85,7 @@ interface TurnTailOwnerProps { turn: TurnLocation; seq: number; openFile(path: s
 ## 五、未来落地建议（本次未实施）
 
 **候选 A 落地步骤**（如后续实施）：
-1. `../lib/routes-manage.js` titles 端点改为一次 `readTitleSnapshots(ids)` 调用，遍历 results 取 `value.title?.title`，`rejected` 按 null 缓存；
+1. `../src/host/routes-manage.ts` titles 端点改为一次 `readTitleSnapshots(ids)` 调用，遍历 results 取 `value.title?.title`，`rejected` 按 null 缓存；
 2. `sessionQuery` 缺失时兜底退回现 `readSession` + `titleFromEvents` 路径；
 3. `../tests/probe/api-surface.test.js` 加 `readTitleSnapshots` 存在性断言；跑 `npm run test:probe` + `npm run verify:host` + 冒烟。
 

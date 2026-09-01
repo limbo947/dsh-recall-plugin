@@ -1,6 +1,6 @@
 # TS 迁移 M4：纯逻辑文件 .ts 化（config/errors/diagnostics/dump-parse/session-info）
 
-> 状态：待实施 ｜ 上游文档：[plan-ts-refactor.md](./plan-ts-refactor.md) ｜ 阶段：M4/8
+> 状态：已完成（2026-09-01 实施）｜ 上游文档：[plan-ts-refactor.md](./plan-ts-refactor.md) ｜ 阶段：M4/8
 >
 > 一句话：五个纯逻辑文件转 `.ts`，DEFAULTS 双份同步与 errors 码表率先进入编译期锁死。
 

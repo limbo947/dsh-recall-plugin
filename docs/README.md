@@ -13,9 +13,7 @@ docs/
 │   ├── improvement-plan.md      # 总索引（单一事实源：计划清单、状态与全局顺序）
 │   ├── research-competitors.md  # 竞品调研（改进计划的调研底稿，静态归档，不参与状态分目录）
 │   ├── pending/                 # 待实施 / 实施中
-│   │   ├── plan-p2.md           # P2 打磨项（按需挑选）
-│   │   ├── plan-ts-refactor.md  # TS 迁移（JS → TypeScript，v3.2）
-│   │   └── plan-ts-refactor-m1..m8.md  # TS 迁移 M1–M8 阶段实施文档
+│   │   └── plan-p2.md           # P2 打磨项（按需挑选）
 │   └── completed/               # 已实施（原地保留实施记录与验收依据，完成不删除）
 │       ├── plan-p0.md               # P0 安全洞堵补
 │       ├── plan-p1.md               # P1 工程补课
@@ -24,6 +22,8 @@ docs/
 │       ├── plan-competitor-fixes.md         # 竞品改进实施审查修复
 │       ├── plan-env-diagnostics.md          # 环境错误主动诊断（issue #11）
 │       ├── plan-performance.md              # 性能优化实施计划（PF-1〜PF-9，2026-08-29 实施+实弹通过）
+│       ├── plan-ts-refactor.md              # TS 迁移（JS → TypeScript，v3.2；M1–M8 已实施，2026-09-01 归档）
+│       ├── plan-ts-refactor-m1..m8.md       # TS 迁移 M1–M8 阶段实施文档（随总计划归档）
 │       ├── smoke-checklist.md               # 冒烟测试待办清单（七节全部通过，2026-08-29）
 │       └── smoke-checklist-records.md       # 冒烟测试执行记录（随清单归档）
 └── screenshots/     # README 与文档引用的截图素材（只增不删，删前查引用）
@@ -47,7 +47,7 @@ docs/
 1. **状态字段**：计划文档头部引用块统一带 `状态：待实施 / 实施中 / 已完成 / 已废弃`；分期计划另带 `上游文档` 链接。目录位置是状态的一级表达，头部状态字段保留为精确表达（如 plan-p0 的「已实施（待发版）」）。
 2. **状态即目录，完成不删除**：待办放 `pending/`，完成后移入 `completed/`——验收记录、「为什么做/为什么不做」的决策依据是后续维护的一手材料；只有内容完全过时且无参考价值时才删。移动时必须同步三处：总索引（improvement-plan.md）链接、文内相对链接（子目录深一层，代码链接 `../../` → `../../../`）、上游文档的反向引用。
 3. **子计划回链**：新分期/专题计划从总计划拆出后，必须在总计划（improvement-plan.md）相应章节挂上链接，保持单一事实源可导航。
-4. **相对链接**：plans/ 根文档指向代码用 `../../lib/...`；`pending/`、`completed/` 内文档深一层，用 `../../../lib/...`；文档互链用相对路径（同目录 `./xxx.md`，跨状态目录 `../` 或 `./completed/` 前缀）。
+4. **相对链接**：plans/ 根文档指向代码用 `../../src/...`；`pending/`、`completed/` 内文档深一层，用 `../../../src/...`。`lib/` 是构建产物目录，文档指向代码一律用 `src/` 路径；文档互链用相对路径（同目录 `./xxx.md`，跨状态目录 `../` 或 `./completed/` 前缀）。
 5. **不预写发版版本号**：计划文档不预先指定具体发版版本号（patch/minor 语义可以写）；版本号在发版流程中确定（见 AGENTS.md 发布流程），避免计划与实际发版节奏漂移。
 
 ## 新增计划文档 checklist

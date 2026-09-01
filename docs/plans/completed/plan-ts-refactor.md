@@ -1,6 +1,6 @@
 # dsh-recall-plugin 重构计划（JS → TypeScript）v3.2
 
-> 状态：待实施（v3.2 评审修订版，评审通过即启动 M1） ｜ 上游文档：[improvement-plan.md](../improvement-plan.md)
+> 状态：已完成（2026-09-01 实施归档，M1–M8 全部落地）｜ 上游文档：[improvement-plan.md](../improvement-plan.md)
 >
 > 事实基准：仓库 HEAD `10f5e61`（2.3.1），2026-09-01 逐文件复核。
 >

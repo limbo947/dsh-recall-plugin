@@ -138,7 +138,7 @@ When each user message is sent (before the agent touches any files), the workspa
 
 ## Local Development (without publishing)
 
-Point the profile's dependency for this package at your clone via `link:`, and changes take effect after restarting DSH (the workspace `lib/` IS the running code — no copying or publishing needed):
+Point the profile's dependency for this package at your clone via `link:`; DSH loads the built `lib/` artifacts from the workspace (source lives in `src/`), so run `npm run build` after editing `src/`, then restart DSH — no copying or publishing needed:
 
 ```powershell
 # 1. Edit $env:USERPROFILE\.dsh\profiles\web\package.json:
@@ -150,15 +150,15 @@ pnpm install
 # 3. Restart DSH and hard-refresh the page (Ctrl+Shift+R)
 ```
 
-Note: the browser-side source lives in `src/client/` (multiple files); `lib/client.js` is the esbuild bundle and is committed with the source — **you must run `npm run build` after changing `src/client/`**, otherwise the old UI keeps running (CI enforces bundle freshness). The host side (the rest of `lib/`) has no build step.
+Note: all source lives in `src/` (host in `src/host/`, browser side in `src/client/`, shared types in `src/types/`); `lib/` is a pure build-output directory — `npm run build` generates it via esbuild (per-file host transpilation plus the `lib/client.js` bundle), and the artifacts are committed with the source. **You must run `npm run build` after changing any `src/` file**, otherwise the stale artifacts keep running (CI enforces artifact freshness).
 
 ### Tests
 
 - `npm test`: pure-logic unit tests (vitest, 17 files / 227 cases, no DSH dependency, runs identically in CI and locally) — config parsing, snapshot parsers, rescue orchestration, error classification, script-template same-name-export contract, client pure functions, published-package layout, snapshot index persistence, storage caps and retention, etc.;
 - `npm run test:probe`: official-API field probes (requires a local dsh installation; **must run after any dsh upgrade**) — pins fields like `renderMessageImages`/`node`/`cwd`, `atSeq`/`increaseTitle` of `sessions.fork`, `listSessions` record shape, `AgentRegistry`, and goes red on violation;
 - `npm run verify:host`: assembly gate (requires a local dsh installation) — boots the plugin with a real cordis context, asserting inject declarations, endpoint registration, Config schema, and teardown cleanliness, catching assembly regressions before release;
-- `npm run build`: bundle the client artifact (mandatory after `src/client/` changes); `npm run check:dsh`: dsh version inspection (pre-release).
-- CI (GitHub Actions) runs `npm ci --legacy-peer-deps` + `npm test` + client bundle freshness check (probes and the assembly gate only run on machines with dsh).
+- `npm run build`: full host+client build (mandatory after any `src/` change); `npm run check:dsh`: dsh version inspection (pre-release).
+- CI (GitHub Actions) runs `npm ci --legacy-peer-deps` + `npm run typecheck` + `npm test` + unified artifact-freshness check (`npm run build && git diff --exit-code lib/`; probes and the assembly gate only run on machines with dsh).
 
 ## License
 

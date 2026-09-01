@@ -1,6 +1,6 @@
 # TS 迁移 M1：类型基础设施（tsconfig / typecheck / CI 门禁）
 
-> 状态：待实施 ｜ 上游文档：[plan-ts-refactor.md](./plan-ts-refactor.md) ｜ 阶段：M1/8
+> 状态：已完成（2026-09-01 实施）｜ 上游文档：[plan-ts-refactor.md](./plan-ts-refactor.md) ｜ 阶段：M1/8
 >
 > 一句话：源码原地不动，类型工具链上线，宽松基线 tsc 绿 + CI 类型门禁就位。
 

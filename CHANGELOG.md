@@ -2,6 +2,12 @@
 
 本文件格式遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循语义化版本。
 
+## [Unreleased]
+
+### 变更
+
+- **源码整体迁移 TypeScript（同形态复刻）**：host/client 源码迁入 `src/`（`src/host/` 13 文件 + `src/client/` 6 文件 + `src/types/` 类型库，跨域契约以编译期类型锁死），`lib/` 转为纯构建产物目录——`npm run build` 经 esbuild 逐文件转译 host 产物 + 打包 `lib/client.js`；功能与对外契约零变化（npm 包布局、`main`/`exports`/`files`、`cordis.patch.yml`、端点/探针/装配门禁均不变），行为一致性由类型检查 + 既有回归网双保险。新增 `npm run typecheck`（CI 类型门禁）与统一产物新鲜度校验。
+
 ## [2.3.1] - 2026-09-01
 
 修复批次（PR #13 贡献，macOS 实机验证；Windows 侧本仓库复核）。单测 285 → 290 例全绿（新增 `nextShadowPriority` 5 例）、`test:probe` 探针 29 → 31 例全绿（新增 `slots.entries` 双包探测）、`verify:host` 装配门禁全绿。

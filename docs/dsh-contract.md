@@ -106,7 +106,7 @@ class SettingsProvider {
 }
 ```
 
-签名与 0.1.1-rc.2 一致（entry 为组合 `base`、hooks.setSource + onChange）；内部 `ctx.inject(['settings'])` 后 `settings.register(ns, schema, ...)`。**0.1.2-alpha.2 破坏性变更：独立函数** **`installSettingsSection`** **移除**，官方插件（bash-local/pwsh-local 等）改 `ctx.inject(['settings'], sctx => sctx.settings.installSection(ctx, ns, schema, entry, hooks))`。插件 `lib/index.js` 双版本兼容：`typeof dshSettings.installSettingsSection === 'function'` 时走旧函数，否则走 `settings.installSection`（verify-host 桩同步提供 installSection）。
+签名与 0.1.1-rc.2 一致（entry 为组合 `base`、hooks.setSource + onChange）；内部 `ctx.inject(['settings'])` 后 `settings.register(ns, schema, ...)`。**0.1.2-alpha.2 破坏性变更：独立函数** **`installSettingsSection`** **移除**，官方插件（bash-local/pwsh-local 等）改 `ctx.inject(['settings'], sctx => sctx.settings.installSection(ctx, ns, schema, entry, hooks))`。插件 `src/host/index.ts` 双版本兼容：`typeof dshSettings.installSettingsSection === 'function'` 时走旧函数，否则走 `settings.installSection`（verify-host 桩同步提供 installSection）。
 
 #### conversation —— 会话级输入服务（**0.1.2 新增**，插件可选探测）
 
@@ -321,7 +321,7 @@ web/deepseek-search-llm-request
 
 ## 七、dsh 升级核查指引
 
-1. **契约对比**（一次升级只做一遍）：对第一节每个源码路径，取新旧两 tag 的文件 diff；`conversation.chat.node` 声明位置可能在包重组后迁移（本次 `ui-conversation` → `ui-chat`），先 `git/trees` 搜 slot 名再 diff。compare API 截断 300 文件不可用，用 `contents/trees` API 逐文件拉。
+1. **契约对比**（一次升级只做一遍）：**类型源 diff 核对法**——插件对官方 API 的依赖面已契约化为 `src/types/dsh-contract.ts`（Host 依赖面，含两个 ambient 模块）与 `src/types/client-contract.ts`（Client slot/`__ModuleLoader__`/服务），升级时以这两文件为**单一类型源**，逐节对照新旧 tag 的官方 `.d.ts`/产物 diff，类型与官方不一致处即升级断点；`conversation.chat.node` 声明位置可能在包重组后迁移（本次 `ui-conversation` → `ui-chat`），先 `git/trees` 搜 slot 名再 diff。compare API 截断 300 文件不可用，用 `contents/trees` API 逐文件拉。
 2. **机器化断言**：`npm run test:probe`（官方字段假设）→ `npm run verify:host`（装配门禁）→ `npm run check:dsh`（版本巡检；镜像漂移提醒后重拉 `reference/` 并更新其头部「归档 dsh 版本」）。
 3. **实弹冒烟**：中文路径工作区发消息 → 撤回（清单/文件恢复/对话回退/标题不变）→ 设置页快照管理。新 UI 机制（如 0.1.2 的 turn-process 折叠、字号调节）重点确认插件 UI 可见性与视觉协调。
 4. **台账**：核查结论对照 `docs/compat-audit.md` I1-I29 定点更新，发现失效项补「失效症状 + 复查动作」。
@@ -337,7 +337,7 @@ web/deepseek-search-llm-request
 >
 > **0.1.2-alpha.2 升级核查已完成（2026-08-31）**：alpha.1 ↔ alpha.2 对比（实测 npm 产物 + release notes）——
 > ① 事件信封 `ignorable?: true` **恢复**（alpha.1 移除改 fail-closed，alpha.2 回滚，`dsh-session`/`dsh-session-persistence` 实测确认），插件不读 ignorable 无影响（§1.3 已改）；
-> ② settings 独立函数 `installSettingsSection` **移除** → `SettingsProvider.installSection` 方法（bash-local/pwsh-local 同款迁移），插件 `lib/index.js` 双版本兼容分支已加、verify-host 桩补 installSection（§1.1 settings 段已改）；
+> ② settings 独立函数 `installSettingsSection` **移除** → `SettingsProvider.installSection` 方法（bash-local/pwsh-local 同款迁移），插件 `src/host/index.ts` 双版本兼容分支已加、verify-host 桩补 installSection（§1.1 settings 段已改）；
 > ③ `conversation.chat.node` 声明位置：alpha.2 已实装在 `dsh-client-ui-chat`（alpha.1 镜像同包），探针路径更新为双包探测（§1.2 已改）；
 > ④ 其余（插件列表分组、Node 24 启动修复、RemoteError 封装、peer 优化）与插件依赖面无交集。机器化断言：`test:probe` 17/17 绿、`verify:host` 全绿、`check:dsh` 仅镜像漂移（reference 已重拉更新）。
 

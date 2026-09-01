@@ -1,6 +1,6 @@
 # TS 迁移 M7：client 侧 .ts 化 + tsconfig 终态
 
-> 状态：待实施 ｜ 上游文档：[plan-ts-refactor.md](./plan-ts-refactor.md) ｜ 阶段：M7/8
+> 状态：已完成（2026-09-01 实施）｜ 上游文档：[plan-ts-refactor.md](./plan-ts-refactor.md) ｜ 阶段：M7/8
 >
 > 一句话：client 六文件转 `.ts`（createElement 风格不变），build-client 入口切换，tsconfig 移除 allowJs 收终态。
 

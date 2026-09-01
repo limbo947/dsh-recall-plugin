@@ -1,6 +1,6 @@
 # TS 迁移 M2：源码纯移动 + 逐文件转译构建 + 统一新鲜度门禁
 
-> 状态：待实施 ｜ 上游文档：[plan-ts-refactor.md](./plan-ts-refactor.md) ｜ 阶段：M2/8
+> 状态：已完成（2026-09-01 实施）｜ 上游文档：[plan-ts-refactor.md](./plan-ts-refactor.md) ｜ 阶段：M2/8
 >
 > 一句话：13 个 host 源文件一次性 rename-only 搬入 `src/host/`，esbuild 逐文件转译接管 `lib/`，`lib/` 自此是纯产物目录。
 

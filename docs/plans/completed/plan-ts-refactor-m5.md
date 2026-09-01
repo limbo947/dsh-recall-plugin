@@ -1,6 +1,6 @@
 # TS 迁移 M5：scripts 双模板 .ts 化 + satisfies 契约锁死
 
-> 状态：待实施 ｜ 上游文档：[plan-ts-refactor.md](./plan-ts-refactor.md) ｜ 阶段：M5/8
+> 状态：已完成（2026-09-01 实施）｜ 上游文档：[plan-ts-refactor.md](./plan-ts-refactor.md) ｜ 阶段：M5/8
 >
 > 一句话：双平台脚本模板接入 `types/scripts.ts` 契约，同名导出硬约束从「运行时兜底 + 单测」升级为「编译期保证」。
 

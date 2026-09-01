@@ -1,6 +1,6 @@
 # TS 迁移 M8：文档同步与计划归档
 
-> 状态：待实施 ｜ 上游文档：[plan-ts-refactor.md](./plan-ts-refactor.md) ｜ 阶段：M8/8
+> 状态：已完成（2026-09-01 实施）｜ 上游文档：[plan-ts-refactor.md](./plan-ts-refactor.md) ｜ 阶段：M8/8
 >
 > 一句话：所有指向源码路径的文档与代码现状对齐，CHANGELOG 记账，计划族归档 completed/。
 
@@ -65,3 +65,34 @@ M7 完成（代码终态）。
 | 归档移动漏同步链接 | 严格按生命周期约定第 2 条三处清单执行 |
 
 回退：文档类变更，revert 即还原。
+
+## 实施记录
+
+> 2026-09-01 实施完成。基线 HEAD `8b075a2`（M7 收口）。任务 1–6 全部落地；终验（任务 7）全绿后归档 `completed/`（本文件与总计划、M1–M7 同批移动，状态字段同步改为已完成）。
+
+### check:upgrade 评估决策（任务 5）
+
+**不纳入 typecheck**，`scripts/check-upgrade.mjs` 保持三步（check:dsh + test:probe + verify:host）不变。理由：
+
+- check:upgrade 定位是「dsh 升级后的一键核验门禁」，三步全是 dsh 兼容面（版本漂移/镜像比对、官方字段探针、装配门禁）；
+- typecheck 只检查插件自身代码的类型一致性，与 dsh 版本无关——`src/types/*` 是插件自持的 ambient 声明，dsh 升级不改变它们；类型断言与官方漂移的发现靠 `test:probe` + dsh-contract.md 第七节「类型源 diff 核对法」；
+- typecheck 已被 CI 类型门禁覆盖（置于单测前，见 AGENTS.md 命令表），本机跑 check:upgrade 重复核验无增量价值；
+- verify:host 消费 `lib/` 产物的新鲜度由「改 src 先 build」本地工作流约定 + CI 产物新鲜度门禁双重兜底。
+
+### 逐项落地
+
+| 任务 | 结果 |
+| --- | --- |
+| 1 AGENTS.md/CODEBUDDY.md 文件地图 | 文件地图表改指 `src/host/*.ts`/`src/client/*.ts` 并新增 `src/types/` 行；`lib/*.js` 标注纯产物；命令表补 typecheck、build 语义改全量、CI 描述更新；本地工作流「改 src 先 build 再 test」成文；重要约束补契约事实源升级；运行时形态/协作流程/link 模式同步（CODEBUDDY.md 是 AGENTS.md 符号链接，自动同步） |
+| 2 docs/ 引用核对 | `compat-audit.md` I9/I14-I20/I23-I26/I29 项目源码引用改指 `src/host/*.ts`（官方包路径保留）；`dsh-contract.md` 两处 `lib/index.js` 改指 + 第七节补「类型源 diff 核对法」；`docs/README.md` 目录树（pending 移除 TS 迁移、completed 新增）与相对链接规范（`src/` 前缀）；`plan-p2.md` recallPanel 改指 `src/client/recall-node.ts`；historical completed/ 计划文档与 research-competitors 为归档记录，保留原样 |
+| 3 README 双语 | `README.md`/`README.en.md` 本地开发段与测试段同步（link 模式需先 build、`lib/` 纯产物目录、build/typecheck/CI 描述）；面向用户功能段零改动 |
+| 4 CHANGELOG | `[Unreleased]` 段新增「源码整体迁移 TypeScript（同形态复刻）」工程变更条目，不预写版本号 |
+| 5 check:upgrade 评估 | 见上——不纳入 typecheck，脚本零改动 |
+| 6 计划归档 | 9 文件 `git mv` pending/ → completed/（rename-only）；`improvement-plan.md` 索引行改 `./completed/` + 状态已完成；docs/README.md 目录树已同步；M 文档头部状态改已完成；相对链接同深度验证无误 |
+
+### 终验（任务 7 四项）
+
+1. 行为零变化：README 功能清单逐条走查，本次仅文档/工程变更，无行为改动；
+2. 契约零变化：package-layout / test:probe / verify:host / cordis.patch.yml 全绿（见 commit 验证）；
+3. 工程质量：`npm run typecheck` 全绿、`@ts-ignore` 零残留；
+4. 文档一致：任务 1–6 完成，`grep -rn "lib/" docs/ AGENTS.md` 无指向源码的残留引用（剩余引用均为产物语义或官方包路径）。

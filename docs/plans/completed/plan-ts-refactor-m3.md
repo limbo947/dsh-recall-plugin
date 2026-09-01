@@ -1,6 +1,6 @@
 # TS 迁移 M3：src/types/ 七个类型文件全建
 
-> 状态：待实施 ｜ 上游文档：[plan-ts-refactor.md](./plan-ts-refactor.md) ｜ 阶段：M3/8
+> 状态：已完成（2026-09-01 实施）｜ 上游文档：[plan-ts-refactor.md](./plan-ts-refactor.md) ｜ 阶段：M3/8
 >
 > 一句话：把目前只活在注释里的契约（DSH 依赖面、payloads、共享 state、scripts 契约、API 形状）建档成唯一类型事实源。
 
