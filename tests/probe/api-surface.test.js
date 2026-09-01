@@ -262,6 +262,29 @@ describe('官方 API 字段探针（dsh 安装目录）', () => {
     })
   })
 
+  describe('slots.entries 快照与 StoredEntry 形状（I31：动态避让的读取面）', () => {
+    // nextShadowPriority 在 slots.inject 回调里调 slots.entries 读同 key 已占用的
+    // priority。0.1.2 起声明在 ui-renderer registry.d.ts；0.1.1-rc.2 在
+    // dsh-client-runtime（双包探测，任一命中即验）。方法删除/改名即红。
+    const cur = { p: 'dsh-client-ui-renderer', f: '/lib/types/client/registry.d.ts' }
+    const old = { p: 'dsh-client-runtime', f: '/lib/types/client/slots.d.ts' }
+    const find = () => (has(cur.p, cur.f) ? cur : has(old.p, old.f) ? old : null)
+    const guard = () => Boolean(find())
+
+    probeIf(guard)('entries(key) 仍返回 readonly StoredEntry[]', () => {
+      const { p, f } = find()
+      expect(read(p, f)).toMatch(/entries\(key[^)]*\):\s*readonly StoredEntry\[\]/)
+    })
+
+    // StoredEntry 本体不随 .d.ts 发布（ui-slots 声明内嵌在 runner 构建产物的
+    // 声明表里），只能在产物中断言形状；options 的 key/priority 是避让算法的
+    // 全部字段假设。窗口放宽到 200/400 字符以容忍声明表重排版。
+    probeIf(() => has('dsh-cordis-client-runner', '/lib/client.js'))('StoredEntry.options 仍含 key/priority（nextShadowPriority 字段假设）', () => {
+      const src = read('dsh-cordis-client-runner', '/lib/client.js')
+      expect(src).toMatch(/interface StoredEntry[\s\S]{0,200}options:\s*\{[\s\S]{0,400}key\?:\s*string;[\s\S]{0,400}priority\?:\s*number/)
+    })
+  })
+
   describe('standardProps/renderEntry 合成（I3：kit 最先展开、ownerProps 同名覆盖）', () => {
     // 合成顺序 `{...kit, ...injected, ...slotInjected.props, ...ownerProps}` 是
     // renderer 构建产物实现；探针只钉「函数仍存在」最低门槛（删除/改名即红），

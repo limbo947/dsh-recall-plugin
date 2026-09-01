@@ -49,6 +49,11 @@
 >    评估是否需覆盖）、I6 的 atSeq/increaseTitle 严格可选断言（变必填即红）；
 > 3. 新增 `npm run check:upgrade` 一键门禁：串联 check:dsh + test:probe +
 >    verify:host，dsh 升级后一条命令全跑，并提示在本文头部追加核验记录。
+>
+> **PR #13 合并收尾（2026-09-01）**：合并外部贡献的两项修复（dsh-turn-fold 槽位
+> priority 动态避让 + POSIX diff awk 多余点号），新增 I31（slots.entries /
+> inject 回调时机 / StoredEntry 形状的新调用点）并补 api-surface 双包探针；
+> CHANGELOG Unreleased 补记 awk 条目。矩阵其余无漂移。
 
 ## 矩阵
 
@@ -437,6 +442,37 @@
   只出现在新 dsh 环境。
 - **复查动作**：dsh 升级后 `npm run verify:host` 必跑；若官方再次调整接入路径
   （如 installSection 改名/改签名），同步兼容分支与 verify-host 桩。
+
+### I31 slots.entries 快照与 slots.inject 回调执行时机（PR #13 动态避让依赖）
+- **依赖的官方行为**：`conversation.chat.node` 的 priority 动态避让
+  （`nextShadowPriority`）依赖三个官方语义：① `slots.entries(key)` 返回该槽位
+  已注册条目的只读快照（稳定引用，render-erased 视图）；② 条目形状
+  `StoredEntry`，priority 在 `entry.options.priority`（可选字段，缺失/非法按 0
+  兜底）；③ `slots.inject(key, cb)` 的回调**在声明已存在时同步执行、否则延迟到
+  声明 register() 提交后执行**——旧实现外层 try/catch 捕获不到延迟回调里的
+  keyed 冲突异常，priority 递减重试实际从未生效（I1 的「冲突递减重试」在 inject
+  延迟路径上是死代码，dsh-turn-fold 占 `-1` 即暴露）。guard 环境（0.1.2）下
+  register 代理强制 allocatePriority 覆盖插件传入值（I29），动态计算值被丢弃但
+  无害——避让的真实生效面是无 guard 的直连环境与官方未来尊重插件 priority 的
+  场景。
+- **出处**：`dsh-client-ui-renderer/lib/types/client/registry.d.ts`
+  （`entries(key): readonly StoredEntry[]` L154；`inject` 文档注释「runs
+  synchronously when the declaration already exists; otherwise it runs inside
+  the declaring register() call」）；`StoredEntry` 本体声明内嵌于
+  `dsh-cordis-client-runner/lib/client.js` 声明表（ui-slots 包不独立发布，
+  `options: { key?, id?, order?, label?, priority? }`）；0.1.1-rc.2 等价面在
+  `dsh-client-runtime/lib/types/client/slots.d.ts` L129（同签名，npm tarball
+  核验）。
+- **探针/单测**：`tests/probe/api-surface.test.js` 新增双包探测（entries 签名
+  + StoredEntry options 形状）；`tests/unit/client-pure.test.js` 的
+  `nextShadowPriority` 5 例（空 entries / 同 key 占用 / 连续冲突 / 非法值 /
+  空形状容错边界）。
+- **失效症状**：entries 删除/改名 → inject 回调内 TypeError 被 catch
+  （console.error），撤回按钮不注册；StoredEntry.options 形状变化 → 计算退化
+  （NaN/undefined 按 0 兜底），避让失效回到 keyed 冲突拒载。
+- **复查动作**：dsh 升级后 `npm run test:probe`（新探针红即 entries/形状漂移）；
+  若 guard 改为尊重插件 priority，动态避让成为主路径，需与 dsh-turn-fold 实弹
+  复验共存。
 
 
 ## 与 E1 verify-host 的对应关系
