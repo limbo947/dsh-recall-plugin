@@ -3,7 +3,8 @@
 //
 // M3 立骨架，M6 按六文件实际消费面定稿——新增导出/签名变化以 M6 实施记录为准。
 
-import type { SnapshotFeedback, EnvErrorKind } from './payloads.js'
+import type { SnapshotFeedback } from './payloads.js'
+import type { EnvErrorKind } from '../host/diagnostics.js'
 import type { PwshScripts, PosixScripts } from './scripts.js'
 
 // store 形态（store.js makeStore 装配：repo 是仓库工作目录、git 是真实 git-dir，

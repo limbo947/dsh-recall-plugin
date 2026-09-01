@@ -71,3 +71,8 @@ export const ALL_CODES = Object.freeze([
   RECALL_UNKNOWN_ENDPOINT,
   RECALL_INDEX_CORRUPT,
 ])
+
+// 错误码联合类型：由常量表派生（types/api.ts 的 errBody.code 引用此类型）。
+// schema/端点改动 code 时，表内增删即自动反映到类型面——码表是单一事实源。
+export type ErrorCode = (typeof ALL_CODES)[number]
+

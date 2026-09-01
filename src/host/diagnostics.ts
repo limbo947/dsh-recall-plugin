@@ -12,13 +12,22 @@
  * 原文（含路径）由设置页「最近错误」承载。
  */
 
+// 环境错误分类 kind（单一事实源）：成员以 classifyEnvError 实现与
+// diagnostics.test.js 断言为唯一来源。读取侧（state.errors.kind）与反馈侧
+// （snapFeedback.kind）的「未分类」表达本就不同——classifyEnvError 未命中
+// 返回 null、buildFeedbackError 未命中补 'unknown'——故拆两个联合，不许
+// 顺手统一（若把 unknown 塞进 EnvErrorKind，ENV_HINTS 的 Record 缺键即编译
+// 报错，这正是拆联合的动机）。types/payloads.ts 与 types/state.ts 从本处
+// import type 引用。
+export type EnvErrorKind = 'git' | 'space' | 'permission' | 'lock' | 'mkdir'
+export type FeedbackKind = EnvErrorKind | 'unknown'
+
 // 分类模式表，按根因优先级排列（同一文本命中多类时先命中者胜——
 // 如 `Unable to create '…lock': No space left on device` 同时命中 lock 与
 // space，磁盘满是根因，space 必须排在 lock 前面）。模式为不区分大小写的
 // 正则，覆盖 git 两平台措辞（POSIX `command not found` / win32 `not
 // recognized`）与常见 errno 文本。
-/** @type {Array<[string, RegExp[]]>} */
-const ENV_PATTERNS = [
+const ENV_PATTERNS: Array<[EnvErrorKind, RegExp[]]> = [
   ['git', [/command not found/i, /not recognized/i, /git: not found/i, /is not a git command/i]],
   ['space', [/no space left on device/i, /disk quota exceeded/i, /enospc/i]],
   ['permission', [/permission denied/i, /operation not permitted/i, /not permitted/i, /access is denied/i]],
@@ -28,7 +37,9 @@ const ENV_PATTERNS = [
 
 // kind → 可行动中文提示（buildFeedbackError 与 status 端点 hint 共用同一
 // 张表，保证 toast 与设置页看到同一套文案）。值都是静态短句，不带路径。
-export const ENV_HINTS = {
+// Record<EnvErrorKind, string> 与 EnvErrorKind 编译期互锁：漏提示即报错
+// （unknown 无提示文案，不入此表）。
+export const ENV_HINTS: Record<EnvErrorKind, string> = {
   git: '未检测到 git CLI 或版本过旧：请安装或升级 git，完成后自动恢复',
   space: '磁盘空间已满，快照写入失败：清理磁盘空间后自动恢复',
   permission: '快照目录无写入权限：请检查目录权限后重试',
@@ -39,7 +50,7 @@ export const ENV_HINTS = {
 // 环境错误分类：命中返回 kind，未命中返回 null（未识别错误保现状回落
 // 原文，误判只影响 toast 文案不影响功能）。git > space > permission >
 // lock > mkdir 的表序即根因优先级，勿按字母序重排。
-export function classifyEnvError(text) {
+export function classifyEnvError(text: string): EnvErrorKind | null {
   const s = String(text || '')
   for (const [kind, patterns] of ENV_PATTERNS) {
     for (const p of patterns) {
@@ -52,7 +63,7 @@ export function classifyEnvError(text) {
 // 把原始错误文本转成 snapFeedback 的失败条目字段：命中 → error 为提示
 // 文案（client toast 直显）；未命中 → error 为原文截断（保 issue #7 现状）、
 // kind 标记 unknown。截断统一收在这里，调用方不再各写一遍 slice。
-export function buildFeedbackError(raw) {
+export function buildFeedbackError(raw: unknown): { error: string; kind: FeedbackKind } {
   const text = String(raw || '')
   const kind = classifyEnvError(text)
   if (!kind) return { error: text.slice(0, 300), kind: 'unknown' }

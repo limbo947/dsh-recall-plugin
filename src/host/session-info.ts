@@ -10,8 +10,16 @@
  * （同步、瞬时），冷数据由 Client 拿到列表后异步调 titles/messages 端点补齐。
  */
 
+import type { SessionEvent, Session } from '../types/dsh-contract.js'
+
+// 工厂 ctx 依赖面最小组化：本工厂只消费 sessions.get（live 快查），
+// sessionQuery 冷读由 routes-manage 侧显式取用，不在此声明
+export interface SessionInfoCtx {
+  sessions: { get(id: string): Session | undefined }
+}
+
 // 从事件序列里取最新一条 session/title（倒序，标题事件通常靠后）
-export function titleFromEvents(events) {
+export function titleFromEvents(events: SessionEvent[] | null | undefined): string | null {
   if (!Array.isArray(events)) return null
   for (let i = events.length - 1; i >= 0; i--) {
     const e = events[i]
@@ -21,7 +29,7 @@ export function titleFromEvents(events) {
 }
 
 // 从事件序列里取指定用户消息的纯文本（text 块拼接）
-export function messageTextFromEvents(events, messageId) {
+export function messageTextFromEvents(events: SessionEvent[] | null | undefined, messageId: string | null | undefined): string | null {
   if (!Array.isArray(events) || !messageId) return null
   for (const e of events) {
     if (e && e.type === 'user/message' && e.data && String(e.data.id) === String(messageId)) {
@@ -36,7 +44,7 @@ export function messageTextFromEvents(events, messageId) {
   return null
 }
 
-export function createSessionInfo(ctx) {
+export function createSessionInfo(ctx: SessionInfoCtx) {
   // 会话标题缓存：值为 null 表示「查过、确实没有」（已删除会话），同样命中缓存
   const sessionTitles = new Map()
   // 消息文本缓存：null 也缓存（避免无文本消息每次刷新重复解压冷日志）

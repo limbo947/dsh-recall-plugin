@@ -60,3 +60,31 @@ M3 完成（types/ 可消费）。`snapshots` 不在本阶段——其工厂与�
 | 类型化顺手「优化」逻辑 | 评审红线：diff 中除类型标注/ import type 外不得有逻辑变化 |
 
 回退：五文件独立小步提交（每文件一个 commit 或域内单 commit 均可），revert 即还原。
+
+## 实施记录
+
+> 2026-09-01 实施完成。基线 HEAD `85c27ca`（M3 收口）。五文件 `git mv` 后类型化，diff 除类型标注/import type 外零逻辑变化（红线复核通过）。
+
+### 逐文件落地
+
+| 文件 | 类型增量 | 说明 |
+| --- | --- | --- |
+| `errors.ts` | `export type ErrorCode = (typeof ALL_CODES)[number]` | 码表单一事实源派生；errors.test.js 一致性扫描全绿 |
+| `config.ts` | `import type { ResolvedConfig, RawConfig }`；`DEFAULTS: ResolvedConfig`；`createConfig(raw: RawConfig): ResolvedConfig` | 类型镜像钉住 DEFAULTS 形状（schema 增删字段漏改即编译期报错）；cfg 显式 `RawConfig` 标注（空对象字面量回退分支） |
+| `diagnostics.ts` | `EnvErrorKind`/`FeedbackKind` 双联合（单一事实源）；`ENV_HINTS: Record<EnvErrorKind, string>`；`classifyEnvError(text: string): EnvErrorKind \| null`；`buildFeedbackError(raw: unknown): { error: string; kind: FeedbackKind }` | ENV_PATTERNS 的 M1 JSDoc 标注升级为 TS 注解 `Array<[EnvErrorKind, RegExp[]]>`；types/payloads.ts 与 state.ts 的 kind 内联改 `import type` 引用（同 commit） |
+| `dump-parse.ts` | `StoreDumpInfo` 接口导出；`parseStoresDump(text: string): Map<string, StoreDumpInfo>`；`parseExcludeDump(text: string): Map<string, string>` | cur 显式 `StoreDumpInfo \| null`；解析容错分支原样保留 |
+| `session-info.ts` | 事件参数 `SessionEvent[] \| null \| undefined`；`SessionInfoCtx` 工厂 ctx 最小组化（只声明 sessions.get） | titleFromEvents/messageTextFromEvents 消费 dsh-contract 事件信封类型 |
+
+### 验收证据
+
+| 验收项 | 结果 |
+| --- | --- |
+| `npm run typecheck` | 绿：exit 0（五文件转 .ts 后首跑即零错误） |
+| `npm run build` 后 `git diff --exit-code lib/` | 退出码 0：五产物从 .ts 转译输出与基线逐字一致（类型擦除，行为零变化实证） |
+| `npm test` | 绿：25 文件 290 例（config/errors/diagnostics/stores-dump/exclude-dump/session-info 及间接引用方全覆盖） |
+| host 侧 M1 豁免清零 | M1 豁免清单的 host 项为 `lib/store.js`（M6 清零），不在本阶段五文件内；本阶段未引入任何新 ts-nocheck。`grep -rn "@ts-ignore" src/` 为零 |
+| diff 红线 | 逐行过目：仅类型标注、`import type`、注释；无逻辑变化（见 diff 摘录） |
+
+### 偏离与备注
+
+- 无计划偏离。`payloads.ts`/`state.ts` 的 kind 引用迁移与五文件同批完成（M4 文档任务 3 明确要求本阶段同步改）。

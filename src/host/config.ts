@@ -14,6 +14,7 @@
  */
 
 import Schema from '@deepseek-ai/schemastery'
+import type { ResolvedConfig, RawConfig } from '../types/config.js'
 
 export const Config = Schema.object({
   gcSnaps: Schema.number().default(50).description('每积累多少条快照触发一次 git gc'),
@@ -32,12 +33,14 @@ export const Config = Schema.object({
 })
 
 // schema 默认值的运行时镜像：settings 服务未组装时 createConfig 直接以
-// 入口 config 解析，这组兜底与 Config 保持一致（改默认值两处同步改）。
+// 入口 config 解析，这组兜底与 Config 保持一致。以 ResolvedConfig 标注钉住
+// 形状——schema 增删字段时 ResolvedConfig（types/config.ts）同步改，漏改
+// DEFAULTS 编译期报错（消灭「改默认值两处同步改」的人工同步面）。
 // DEFAULTS 同时供 config-reset 降级路径（settings.replace 不可用时的兜底，
 // 见 index.js config-reset 端点）——默认值只此一份，避免重置与 schema 漂移。
 const BASE_EXCLUDES = ['.git', 'node_modules/', '.dsh-recall-snapshots/', 'dsh-recall-snapshots/']
 
-export const DEFAULTS = {
+export const DEFAULTS: ResolvedConfig = {
   gcSnaps: 50,
   gcHours: 24,
   maxFileBytes: 104857600,
@@ -49,8 +52,8 @@ export const DEFAULTS = {
   retentionDays: 0,
 }
 
-export function createConfig(raw) {
-  const cfg = raw && typeof raw === 'object' ? raw : {}
+export function createConfig(raw: RawConfig): ResolvedConfig {
+  const cfg: RawConfig = raw && typeof raw === 'object' ? raw : {}
 
   function pickNumber(value, fallback, min) {
     const n = typeof value === 'number' ? value : parseInt(String(value == null ? '' : value), 10)

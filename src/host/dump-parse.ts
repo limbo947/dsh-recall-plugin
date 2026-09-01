@@ -8,6 +8,17 @@
  * re-export 保持既有 import 路径稳定。
  */
 
+import type { IndexEntry, LineageEntry } from '../types/payloads.js'
+
+// storesDumpScript 单 store 段结构（root 对应 root.txt 的 RootRecord 形状；
+// entries/lineage 分别对应 index.json / lineage.json 的条目形状）
+export interface StoreDumpInfo {
+  dir: string
+  root: string | null
+  entries: IndexEntry[] | null
+  lineage: LineageEntry[] | null
+}
+
 // 解析 storesDumpScript 的定界输出：dir → { root, entries, lineage }。逐行
 // 状态机（==DIR / ROOT / INDEXBEGIN..INDEXEND / LINEAGEBEGIN..LINEAGEEND），
 // 单个 store 的 JSON 损坏只丢它自己。
@@ -63,8 +74,8 @@ export function parseStoresDump(text) {
 // / EXCLEND → Map<路径, 原文>。内容行是 base64（ASCII 单行），exclude.txt
 // 里的任意文本（空行/注释/恰好像标记的行）都不会打乱状态机；文件不存在的
 // 段内容为空串（按「尚未配置」处理）。
-export function parseExcludeDump(text) {
-  const map = new Map()
+export function parseExcludeDump(text: string): Map<string, string> {
+  const map = new Map<string, string>()
   let cur = null
   for (const line of String(text || '').split(/\r?\n/)) {
     if (line.indexOf('EXCLBEGIN ') === 0) { cur = line.slice('EXCLBEGIN '.length).trim(); map.set(cur, ''); continue }

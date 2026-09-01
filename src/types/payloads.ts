@@ -5,9 +5,9 @@
 // 兼容字段建模纪律：读取侧字段全部可选化——旧版本插件读新索引要忽略未知字段
 // （index.json/lineage.json 的既有兼容纪律）。
 
-// 环境错误分类 kind（M3 内联占位，M4 diagnostics.ts 定稿后改 import type 引用）
-export type EnvErrorKind = 'git' | 'space' | 'permission' | 'lock' | 'mkdir'
-export type FeedbackKind = EnvErrorKind | 'unknown'
+// 环境错误分类 kind 单一事实源在 src/host/diagnostics.ts（M4 起）
+import type { EnvErrorKind, FeedbackKind } from '../host/diagnostics.js'
+export type { EnvErrorKind, FeedbackKind }
 
 // 逐消息快照反馈（issue #7 失败可见性）：failed / skipped 互斥，用联合建模。
 // 事实来源：snapshots.js setFeedback 的写入侧——`{ failed: true, ...buildFeedbackError(..) }`
