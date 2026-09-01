@@ -2,6 +2,12 @@
 
 本文件格式遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循语义化版本。
 
+## [Unreleased]
+
+### 修复
+
+- **兼容 dsh-turn-fold 的用户消息渲染槽位**：`conversation.chat.node` 的 `user` key 改为在槽位回调实际执行时读取已占用的 priority，并自动选择当前最低 priority 再低一级，避免与 `dsh-turn-fold` 等第三方插件固定占用 `-1` 时发生冲突；其他插件继续占用更低 priority 时也会自动避让。
+
 ## [2.3.0] - 2026-08-31
 
 修复批次：适配 dsh 0.1.2 / 0.1.2-alpha.2（兼容 0.1.1-rc.2）。单测 285 例全绿，`verify:host` 装配门禁、`check:dsh` 巡检、`test:probe` 探针全绿；新旧两版 DSH（0.1.1-rc.2 / 0.1.2-alpha.2，Windows）实弹验证通过——撤回按钮、设置页「撤回插件」卡片、快照删除均正常。
