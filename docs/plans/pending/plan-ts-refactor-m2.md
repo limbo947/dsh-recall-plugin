@@ -137,3 +137,34 @@ esbuild 对 13 个文件的格式规整差异（引号/换行等）属预期一�
 | 漏 build 直接跑测试导致 package-layout 基于陈旧产物 | 本阶段起本地工作流约定：改 `src/` 先 `npm run build` 再 `npm test`（M8 写进文档） |
 
 回退：revert 本阶段全部 commit，恢复 lib/ 源码身份。
+
+## 实施记录
+
+> 2026-09-01 实施完成。基线 HEAD `cd7e862`（M1 收口）。
+
+### Commit 边界（M2 三个独立 commit）
+
+| commit | 内容 | 验证 |
+| --- | --- | --- |
+| `7144172` | host 源码纯移动 lib/ → src/host/（rename-only） | `git show --stat` 13 条全 R100，0 insertions/0 deletions |
+| `805f4b1` | 构建切换：build-host.mjs 新建、package.json build 改为 host+client 串联、tsconfig 迁移期形态（include src/** + tests/types、checkJs 关、allowJs 留、exclude 移除）、22 个单测 import `../../lib/` → `../../src/host/`（`.js` 后缀原样）、CI 统一新鲜度门禁（Bundle freshness gate 覆盖全 lib/） | 替换后 `git diff tests/` 人工过目仅 import 路径行；单测全绿兜底 |
+| `bd52ec0` | lib/ 13 个 host 产物切换为 esbuild 逐文件转译输出（一次性格式规整 diff，3293 行新增） | 语义抽查：scripts.posix.js/pwsh.js 产物中 `g=` 约定、`--ignore-errors`、`:(top)` pathspec、`ROLLBACK_OK`/`RESCUE_OK` 哨兵均在 |
+
+### 验收证据
+
+| 验收项 | 结果 |
+| --- | --- |
+| 移动 commit 纯 R 记录 | `git show --stat 7144172`：13 文件全 `rename {lib => src/host}/*.js (100%)`，0 增删 |
+| 产物 diff 独立 commit | `bd52ec0` 仅含 lib/ 13 文件（client.js 无变化——entry.js 的 M1 变更仅为注释，esbuild 裁减后产物不变） |
+| build 确定性 | `npm run build` 后 `git diff --exit-code lib/` 退出码 0（输出为空） |
+| `npm test` | 绿：25 文件 290 例（含 package-layout，pack 布局断言零改动通过） |
+| `npm run typecheck` | 绿：迁移期形态（allowJs 保留、checkJs 关闭），exit 0 |
+| `npm run verify:host` | 绿：装配断言全部通过（inject=shell,sessions,webServer,agents，端点 12 项，agents 桩访问 1 次）——消费 lib/index.js 产物，脚本零改动 |
+| `npm run test:probe` | 绿：2 文件 31 例（探针不 import 插件源码，钉真实 dsh 安装） |
+
+### 偏离与备注
+
+- 计划给的 node 一行式批替换在 PowerShell 环境被引号转义干扰（`node -e` 偶发空输出/exit 1），改用临时 mjs 脚本执行同一替换逻辑后删除；替换结果与计划一致（22 个文件，29 行 import 变化）。
+- npm install 移除了 `@deepseek-ai/{schemastery,dsh-settings}` junction，M1 已重建；本阶段无新增依赖变更。
+- 产物与手写源码差异：esbuild 双引号归一、字符串非 ASCII 转 `\uXXXX`、注释大幅裁减（保留部分 `// PF-x`/`//` 关键注释与 `/* @__PURE__ */` 标记）——语义等价（`\uXXXX` 运行期解码同串），属预期一次性成本。
+- 红线复核：`lib/` 产物文件名与迁移前基线逐一相同（14 文件同名同数：13 host + client.js）；`grep -rn "@ts-ignore" src/ lib/` 为零。
