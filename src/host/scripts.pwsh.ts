@@ -11,9 +11,11 @@
  * 由 store.js 按 process.platform 选择。
  */
 
+import type { ScriptStore } from '../types/scripts.js'
+
 // 单引号字面量转义：PS 单引号串里只有 '' 表示一个单引号，且不展开变量，
 // 是把 JS 值安全嵌进命令串的唯一可靠方式（杜绝 $、反引号注入）。
-export function psq(value) {
+export function psq(value: string): string {
   return "'" + String(value).replace(/'/g, "''") + "'"
 }
 
@@ -54,7 +56,7 @@ export const FIDELITY_ATTRS = '* -text -filter -ident -export-ignore -export-sub
 
 // 去除 PS 5.1 Set-Content -Encoding utf8 写出的 BOM：JSON 解析前必须剥掉，
 // 否则 JSON.parse 把 BOM 当正文首字符直接抛错。
-export function stripBom(text) {
+export function stripBom(text: string): string {
   return text.replace(/^\uFEFF/, '')
 }
 
@@ -170,7 +172,7 @@ function heartbeatBlock() {
 // 解析 git 可执行文件路径：DSH 进程 PATH 可能不含 git，脚本里用绝对路径调用。
 // 逐项判空再 Join-Path：个别 env 在特殊环境（32 位系统无 ProgramFiles(x86)）
 // 取到 null，EAP=Stop 下 Join-Path 抛错会让整个探测失败、误报 gitMissing。
-export function resolveGitScript() {
+export function resolveGitScript(): string {
   return [
     '$candidates = @()',
     '$g = (Get-Command git -ErrorAction SilentlyContinue).Source',
@@ -187,7 +189,7 @@ export function resolveGitScript() {
 // 哈希用 Create()+ComputeHash+BitConverter 而不是 HashData+ToHexString：
 // 后两者是 .NET 5+（仅 PS 7）API，别人机器的 shell 若是 Windows PowerShell
 // 5.1 会抛错，导致 home 存储永远降级到项目内；前者两个版本都可用。
-export function homeDirScript(root, envHome) {
+export function homeDirScript(root: string, envHome: string): string {
   return [
     '$r = ' + psq(root),
     "$h = if ($env:DSH_HOME) { $env:DSH_HOME } elseif (" + psq(envHome) + ") { " + psq(envHome) + " } else { Join-Path $env:USERPROFILE \".dsh\" }",
@@ -197,12 +199,12 @@ export function homeDirScript(root, envHome) {
   ].join('\n')
 }
 
-export function mkdirScript(dir) {
+export function mkdirScript(dir: string): string {
   return 'New-Item -ItemType Directory -Force -Path ' + psq(dir) + ' | Out-Null'
 }
 
 // 旧版迁移：把降级时代落在项目内的影子仓库整体搬回 home 并删源目录
-export function migrateScript(src, dst) {
+export function migrateScript(src: string, dst: string): string {
   return [
     "$ErrorActionPreference = 'Stop'",
     '$src = ' + psq(src),
@@ -226,7 +228,7 @@ export function migrateScript(src, dst) {
 // 结尾回读 gc.stamp（maintenance.js 上次 gc 时间戳）：让重启后的 gc 节流
 // 不归零——没有它，天天重启 DSH 的用户每次开机第一条消息都会触发一次
 // 全量 gc，纯浪费。
-export function ensureGitScript(store, gitExe, base) {
+export function ensureGitScript(store: ScriptStore, gitExe: string, base: string[]): string {
   return [
     "$ErrorActionPreference = 'Stop'",
     '$git = ' + psq(gitExe),
@@ -274,7 +276,7 @@ function attrsMigrateBlock() {
 // tag -f：事件重放/重发会产生重复 messageId，裸 tag 对已存在 tag fatal
 // 导致整条快照失败；commit-tree 每次生成新对象，-f 把 tag 指到最新提交，
 // 与「同一条消息重快照取最新状态」的语义一致。
-export function snapshotScript(root, store, gitExe, messageId, base) {
+export function snapshotScript(root: string, store: ScriptStore, gitExe: string, messageId: string, base: string[]): string {
   return [
     "$ErrorActionPreference = 'Stop'",
     '$git = ' + psq(gitExe),
@@ -328,7 +330,7 @@ export function snapshotScript(root, store, gitExe, messageId, base) {
 // 脚本侧，total 语义由 TOTAL 行保持。write-tree 探测指纹（add 后的 index 树
 // 即工作区精确状态），preview 回传、execute 与安全快照比对判 STALE，省掉
 // execute 的整条重复 diff；无引用树对象由 prune/定期 gc 回收（每棵数百字节）。
-export function diffScript(root, store, gitExe, tag, base, maxChanges) {
+export function diffScript(root: string, store: ScriptStore, gitExe: string, tag: string, base: string[], maxChanges: number): string {
   // 截断数由调用侧注入（snapshots.js MAX_CHANGES 单一事实源），模板不硬编码
   const take = Math.max(1, Math.trunc(Number(maxChanges) || 500))
   return [
@@ -389,7 +391,7 @@ export function diffScript(root, store, gitExe, tag, base, maxChanges) {
 // 空树跳过 archive（空 zip 会让 Expand-Archive 报错），只执行删除。
 // 回退后保留快照 tag 与索引：git delta 空间便宜，保留历史可再次
 // 用该快照恢复（幂等），也避免误回退后无法找回。
-export function rollbackScript(root, store, gitExe, tag, base) {
+export function rollbackScript(root: string, store: ScriptStore, gitExe: string, tag: string, base: string[]): string {
   return [
     "$ErrorActionPreference = 'Stop'",
     '$git = ' + psq(gitExe),
@@ -442,7 +444,7 @@ export function rollbackScript(root, store, gitExe, tag, base) {
 // 通用只接受完整名）。命令与 rollbackScript 同款 --git-dir/--work-tree 形态；
 // pwsh 对 native 非零退出不抛（EAP 不作用于 native），必须显式查
 // $LASTEXITCODE 并 throw，否则救援失败被静默吞掉、工作区停在半回退状态。
-export function rescueScript(root, store, gitExe, tag) {
+export function rescueScript(root: string, store: ScriptStore, gitExe: string, tag: string): string {
   return [
     "$ErrorActionPreference = 'Stop'",
     '$git = ' + psq(gitExe),
@@ -454,7 +456,7 @@ export function rescueScript(root, store, gitExe, tag) {
   ].join('\n')
 }
 
-export function listTagsScript(store, gitExe) {
+export function listTagsScript(store: ScriptStore, gitExe: string): string {
   return [
     "$ErrorActionPreference = 'Stop'",
     '$git = ' + psq(gitExe),
@@ -470,7 +472,7 @@ export function listTagsScript(store, gitExe) {
 // rebuildOrphans 据此恢复快照时间，time=0 会让管理列表时间前缀缺失、
 // retention/limits 按「最旧」误清。lightweight tag 的 creatordate 即
 // 指向 commit 的提交日期。输出每行「<tag名> <秒级时间戳>」。
-export function listTagsWithTimeScript(store, gitExe) {
+export function listTagsWithTimeScript(store: ScriptStore, gitExe: string): string {
   return [
     "$ErrorActionPreference = 'Stop'",
     '$git = ' + psq(gitExe),
@@ -486,7 +488,7 @@ export function listTagsWithTimeScript(store, gitExe) {
 // （默认 2 周宽限期内对象仍占盘）——安全前提是 gc 与快照在同一条串行
 // 队列里执行（见 maintenance.js），不存在并发竞态。
 // 结尾写 gc.stamp：跨重启的节流凭据（ensureGit 回读）。
-export function gcScript(store, gitExe) {
+export function gcScript(store: ScriptStore, gitExe: string): string {
   return [
     "$ErrorActionPreference = 'Stop'",
     '$git = ' + psq(gitExe),
@@ -503,7 +505,7 @@ export function gcScript(store, gitExe) {
 // 为根做可达性删除，正好只清掉这批无主对象，不碰任何 tag 快照。不做 gc：
 // gc 是全量 repack 重活，失败重试场景下对象库往往已被残骸撑大，代价过高。
 // 调用点在 captureSnapshot 的 catch 里，与快照同走一条串行队列，无锁竞态。
-export function pruneScript(store, gitExe) {
+export function pruneScript(store: ScriptStore, gitExe: string): string {
   return [
     "$ErrorActionPreference = 'Stop'",
     '$git = ' + psq(gitExe),
@@ -523,7 +525,7 @@ export function pruneScript(store, gitExe) {
 // 全程 SilentlyContinue + best-effort：调用点在 runShell 的失败路径上，
 // 清扫自身再抛错只会掩盖原始错误。首行哨兵注释供 runShell 识别本脚本、
 // 防止「清扫失败 → 再清扫」的递归。
-export function killOrphansScript(gitDir) {
+export function killOrphansScript(gitDir: string): string {
   return [
     '# RECALL_CLEANUP',
     "$ErrorActionPreference = 'SilentlyContinue'",
@@ -583,7 +585,7 @@ export function killOrphansScript(gitDir) {
 // 删除指定快照 tag（会话已删联动清理用）。best-effort：个别 tag 已不存在时
 // git 非零退出，但其余 tag 已被删除——所以显式 exit 0 吞掉退出码，
 // 残留的由下一次清理幂等地收尾；JS 侧无论脚本结果都会同步索引。
-export function purgeTagsScript(store, gitExe, tags) {
+export function purgeTagsScript(store: ScriptStore, gitExe: string, tags: string[]): string {
   return [
     "$ErrorActionPreference = 'Stop'",
     '$git = ' + psq(gitExe),
@@ -605,7 +607,7 @@ export function purgeTagsScript(store, gitExe, tags) {
 // 与代码页无关；落盘必须用 .NET WriteAllText 无 BOM 重载（PS 5.1 的
 // Set-Content -Encoding utf8 必带 BOM）。目录创建归调用方（writeExclude 的
 // mkdirScript 兜底 / index.json 的父目录在建仓时已存在）。
-export function fileWriteStdinCmd(file) {
+export function fileWriteStdinCmd(file: string): string {
   return [
     "$ErrorActionPreference = 'Stop'",
     '$tmp = ' + psq(file),
@@ -621,7 +623,7 @@ export function fileWriteStdinCmd(file) {
 // 原子 rename（H2）：同卷 move 是 O(1) 元数据操作，把「已完整写完的 tmp」
 // 一步替换成目标文件，杜绝分块写中途崩溃留下的截断 JSON；也用于 loadIndex
 // 把损坏索引改名 .corrupt-<ts> 保留现场（见 snapshots.js quarantineCorruptIndex）。
-export function renameFileCmd(src, dst) {
+export function renameFileCmd(src: string, dst: string): string {
   return "$ErrorActionPreference = 'Stop'\nMove-Item -Force -LiteralPath " + psq(src) + ' -Destination ' + psq(dst)
 }
 
@@ -629,13 +631,13 @@ export function renameFileCmd(src, dst) {
 // 无 BOM UTF-8，PS 7 默认即按 UTF-8 读，但 PS 5.1 兜底（pwsh-local 解析链
 // 降级）按 ANSI 活动代码页解码——中文 root 乱码 → JSON.parse 失败 → 误走
 // H2 隔离分支。与 excludeReadCmd 等同文件其他读取处的既有写法对齐。
-export function indexReadCmd(dir) {
+export function indexReadCmd(dir: string): string {
   return 'Get-Content -LiteralPath ' + psq(dir + '\\index.json') + ' -Raw -Encoding UTF8 -ErrorAction SilentlyContinue'
 }
 
 // fork lineage 读取（F1）：lineage.json 记录 childId↔parentId 撤回链，
 // 与 index.json 同层、原子写（writeTextViaShell）。文件不存在时输出空串。
-export function lineageReadCmd(dir) {
+export function lineageReadCmd(dir: string): string {
   return 'Get-Content -LiteralPath ' + psq(dir + '\\lineage.json') + ' -Raw -Encoding UTF8 -ErrorAction SilentlyContinue'
 }
 
@@ -643,14 +645,14 @@ export function lineageReadCmd(dir) {
 // -ErrorAction SilentlyContinue（PF-5）：目标不存在是常态（极早期版本才有），
 // 不容错的话 Remove-Item 抛错 → cleanupLegacy 永远走不到「成功」分支，
 // legacyCleaned 标记失效，每次 init 都白跑一条进程。
-export function legacyRmScript(path) {
+export function legacyRmScript(path: string): string {
   return 'Remove-Item -Recurse -Force -LiteralPath ' + psq(path) + ' -ErrorAction SilentlyContinue'
 }
 
 // exclude.txt 原文读取（设置页编辑用）：-Raw 保留换行与空行结构，让用户
 // 看到的就是落盘原文；文件不存在时 SilentlyContinue 输出空串，JS 侧按
 // 「尚未配置」处理——设置页在快照存储刚建好、exclude.txt 还没写过时也会打开。
-export function excludeReadCmd(file) {
+export function excludeReadCmd(file: string): string {
   return 'Get-Content -LiteralPath ' + psq(file) + ' -Raw -Encoding UTF8 -ErrorAction SilentlyContinue'
 }
 
@@ -661,7 +663,7 @@ export function excludeReadCmd(file) {
 // 文件不存在输出空段（JS 侧按「尚未配置」处理，与 excludeReadCmd 一致）。
 // 输出协议（JS 侧 parseExcludeDump 解析）：
 //   EXCLBEGIN <文件路径> / <base64 单行，可为空> / EXCLEND
-export function excludeDumpScript(files) {
+export function excludeDumpScript(files: string[]): string {
   const lines = ["$ErrorActionPreference = 'SilentlyContinue'"]
   for (const f of files || []) {
     const q = psq(f)
@@ -676,14 +678,14 @@ export function excludeDumpScript(files) {
 
 // 目录存在探测：输出定长 YES/NO 标记（与 posix 版逐字同语义），
 // JS 侧统一按 'YES' 判定，不依赖退出码——runShell 对非零退出直接抛错。
-export function dirExistsScript(dir) {
+export function dirExistsScript(dir: string): string {
   return "if (Test-Path -LiteralPath " + psq(dir) + " -PathType Container) { Write-Output 'YES' } else { Write-Output 'NO' }"
 }
 
 // 影子仓库磁盘占用（设置页快照管理卡片用）：git 自带的 count-objects -v
 // 输出含 size-pack（KiB 单位，pack 文件总大小），足够向用户展示量级，
 // 不需要逐文件累加的慢扫描。
-export function countObjectsScript(store, gitExe) {
+export function countObjectsScript(store: ScriptStore, gitExe: string): string {
   return [
     '$git = ' + psq(gitExe),
     '$g = ' + psq(store.git),
@@ -695,7 +697,7 @@ export function countObjectsScript(store, gitExe) {
 // 逐目录 try/catch 跳过不可访问目录）替代 Get-ChildItem -Recurse 逐文件
 // 管道求和，GB 级快照库从秒级降到亚秒。$sum 初始化 [long]0 防溢出，目录
 // 为空/全跳过时输出 0（旧实现的 .Sum 为 null，JS 侧 parseInt||0 兜底等价）。
-export function diskUsageScript(dir) {
+export function diskUsageScript(dir: string): string {
   const q = psq(dir)
   return [
     '$usageStack = [System.Collections.Generic.Stack[string]]::new()',
@@ -716,7 +718,7 @@ export function diskUsageScript(dir) {
 // 列目录下所有一级子目录全路径：manage/list 枚举 home 容器下的所有
 // 哈希子目录用（每个子目录是一个工作区的 store）。SilentlyContinue
 // 容忍个别不可读条目。输出每行一个全路径，JS 侧按换行拆分。
-export function listSubdirsScript(dir) {
+export function listSubdirsScript(dir: string): string {
   return "Get-ChildItem -LiteralPath " + psq(dir) + " -Directory -ErrorAction SilentlyContinue | ForEach-Object { Write-Output $_.FullName }"
 }
 
@@ -732,7 +734,7 @@ export function listSubdirsScript(dir) {
 //   LINEAGEBEGIN / lineage.json 原文 / LINEAGEEND
 // 标记行不会与内容混淆：root 路径不含换行（Windows 非法字符），JSON
 // 单行以 [ 或 { 起头、内部路径同样不含换行。
-export function storesDumpScript(container, extraDirs) {
+export function storesDumpScript(container: string, extraDirs: string[]): string {
   const lines = [
     "$ErrorActionPreference = 'Stop'",
     '$dirs = @()'

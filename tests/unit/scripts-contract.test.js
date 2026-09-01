@@ -18,6 +18,8 @@ import * as posix from '../../src/host/scripts.posix.js'
 // 平台专属导出（homeDirScript 的 $h 链只在 pwsh 侧需要；probeHomeScript
 // 只在 posix 侧用于 home 基底探测；legacyHomeMigrateScript 仅 posix 版
 // 存在——旧容器迁移是 POSIX 漂移（I24）专属的存量数据兜底）。
+// 豁免集事实源：src/types/scripts.ts 平台专属接口（PwshScripts/PosixScripts
+// extends 差分）；本集合是它的单测侧镜像，tests/types satisfies 断言已编译期锁死。
 // PF-2 起 fileWriteStdinCmd 两平台同名导出（stdin 单进程落盘），
 // 旧的 pwsh 专属 fileWriteCmd（base64 分块）已整体移除。
 const SKIP = new Set(['homeDirScript', 'probeHomeScript', 'legacyHomeMigrateScript'])

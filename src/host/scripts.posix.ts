@@ -14,9 +14,11 @@
  *   与 Node 侧 UTF-8 解码各司其职：bash 不转码，字节原样通过。
  */
 
+import type { ScriptStore } from '../types/scripts.js'
+
 // 单引号字面量转义：bash 单引号串里不能出现单引号，标准手法是
 // 关闭引号 + \' 转义 + 重开（'…'\''…'），杜绝变量展开与注入。
-export function psq(value) {
+export function psq(value: string): string {
   return "'" + String(value).replace(/'/g, "'\\''") + "'"
 }
 
@@ -52,7 +54,7 @@ export const HEARTBEAT_TTL_S = 900
 export const FIDELITY_ATTRS = '* -text -filter -ident -export-ignore -export-subst -working-tree-encoding'
 
 // bash/cat 输出无 BOM；保留同名导出维持两套模板接口一致（幂等无害）
-export function stripBom(text) {
+export function stripBom(text: string): string {
   return text.replace(/^\uFEFF/, '')
 }
 
@@ -144,7 +146,7 @@ function heartbeatBlock() {
 
 // 解析 git 可执行文件路径：bash 从 PATH 找（POSIX 上 git 装了就在 PATH，
 // 没有 Windows 那种四类安装位置的散装问题）
-export function resolveGitScript() {
+export function resolveGitScript(): string {
   return [
     'p=$(command -v git 2>/dev/null || true)',
     '[ -n "$p" ] && printf \'%s\\n\' "$p"',
@@ -158,16 +160,16 @@ export function resolveGitScript() {
 // 通常不可见——若在此回退 $HOME，Node 侧的字面量回退永远轮不到，
 // 「DSH_HOME 指到哪、快照就存哪」会失效。优先级与 pwsh 版对齐：
 // bash env 显式值 > Node 主进程 DSH_HOME > $HOME（os.homedir）。
-export function probeHomeScript() {
+export function probeHomeScript(): string {
   return 'printf \'%s\' "${DSH_HOME:-}"'
 }
 
-export function mkdirScript(dir) {
+export function mkdirScript(dir: string): string {
   return 'mkdir -p -- ' + psq(dir)
 }
 
 // 旧版迁移：把降级时代落在项目内的影子仓库整体搬回 home 并删源目录
-export function migrateScript(src, dst) {
+export function migrateScript(src: string, dst: string): string {
   return [
     'set -e',
     'src=' + psq(src),
@@ -186,7 +188,7 @@ export function migrateScript(src, dst) {
 // 输出后不动任何数据。无 set -e（要靠分支输出状态而非中途退出）；if 条件
 // 内的 && 链豁免 I16 约束（该坑只针对循环体与裸列表）。非 git 命令，不适用
 // g= 赋值 / RECALL_CLEANUP 哨兵约定。
-export function legacyHomeMigrateScript(homedir) {
+export function legacyHomeMigrateScript(homedir: string): string {
   return [
     'old=' + psq(homedir + '/dsh-recall-snapshots'),
     'new=' + psq(homedir + '/.dsh/dsh-recall-snapshots'),
@@ -200,7 +202,7 @@ export function legacyHomeMigrateScript(homedir) {
 
 // 建立影子仓库 + 排除同步 + 回读 gc.stamp（语义与 pwsh 版一致，
 // 见 scripts.pwsh.js 同名函数注释）
-export function ensureGitScript(store, gitExe, base) {
+export function ensureGitScript(store: ScriptStore, gitExe: string, base: string[]): string {
   return [
     'set -e',
     'git=' + psq(gitExe),
@@ -252,7 +254,7 @@ function attrsMigrateBlock() {
 // 快照：add -A → write-tree → commit-tree（孤儿提交）→ tag（语义同 pwsh 版）。
 // tag -f：事件重放/重发会产生重复 messageId，裸 tag 对已存在 tag fatal
 // 导致整条快照失败；-f 把 tag 指到最新提交，语义为「同一条消息取最新状态」。
-export function snapshotScript(root, store, gitExe, messageId, base) {
+export function snapshotScript(root: string, store: ScriptStore, gitExe: string, messageId: string, base: string[]): string {
   return [
     'set -e',
     'git=' + psq(gitExe),
@@ -323,7 +325,7 @@ function collectListsBlock(store, gitExe, root, tag, base) {
 // PF-1：末尾追加 write-tree + TREE 行（add 后的 index 树指纹，语义见 pwsh
 // 版同注释）。POSIX 侧 TSV 文本轻、无 ConvertTo-Json 序列化开销，不做
 // TOTAL/截断——全量输出，截断仍由 JS 侧 slice（与既有语义一致）。
-export function diffScript(root, store, gitExe, tag, base) {
+export function diffScript(root: string, store: ScriptStore, gitExe: string, tag: string, base: string[]): string {
   return [
     'set -e -o pipefail',
     collectListsBlock(store, gitExe, root, tag, base),
@@ -354,7 +356,7 @@ export function diffScript(root, store, gitExe, tag, base) {
 // ROLLBACK_OK，半回退报成功、救援永不触发；改为 if/fi + 失败显式 exit 1，
 // 与 pwsh 版「EAP=Stop 下 Remove-Item 抛终止错误」对齐「删除失败即失败」
 // 的语义（见 scripts.pwsh.js rollbackScript 同位置注释）。
-export function rollbackScript(root, store, gitExe, tag, base) {
+export function rollbackScript(root: string, store: ScriptStore, gitExe: string, tag: string, base: string[]): string {
   return [
     'set -e -o pipefail',
     collectListsBlock(store, gitExe, root, tag, base),
@@ -393,7 +395,7 @@ export function rollbackScript(root, store, gitExe, tag, base) {
 // 入参 tag 是完整 tag 名（snap- 前缀由调用侧 rescueRollback 拼齐）。
 // set -e 下 git 非零退出自然终止脚本，与 pwsh 版 $LASTEXITCODE 显式自检
 // 对齐「失败即抛」语义。
-export function rescueScript(root, store, gitExe, tag) {
+export function rescueScript(root: string, store: ScriptStore, gitExe: string, tag: string): string {
   return [
     'set -e',
     'git=' + psq(gitExe),
@@ -404,7 +406,7 @@ export function rescueScript(root, store, gitExe, tag) {
   ].join('\n')
 }
 
-export function listTagsScript(store, gitExe) {
+export function listTagsScript(store: ScriptStore, gitExe: string): string {
   return [
     'set -e',
     'git=' + psq(gitExe),
@@ -420,7 +422,7 @@ export function listTagsScript(store, gitExe) {
 // 时间——只列 tag 名会让重建条目 time=0，管理列表时间前缀缺失、
 // retention/limits 按「最旧」误清。lightweight tag 无 tag 对象，
 // creatordate 即指向 commit 的提交日期。输出每行「<tag名> <秒级时间戳>」。
-export function listTagsWithTimeScript(store, gitExe) {
+export function listTagsWithTimeScript(store: ScriptStore, gitExe: string): string {
   return [
     'set -e',
     'git=' + psq(gitExe),
@@ -431,7 +433,7 @@ export function listTagsWithTimeScript(store, gitExe) {
 }
 
 // 定期 gc（语义同 pwsh 版）；date +%s 写秒级时间戳，JS 侧 ×1000
-export function gcScript(store, gitExe) {
+export function gcScript(store: ScriptStore, gitExe: string): string {
   return [
     'set -e',
     'git=' + psq(gitExe),
@@ -444,7 +446,7 @@ export function gcScript(store, gitExe) {
 
 // 快照失败后的残骸清理（语义同 pwsh 版，动机详见其注释）：prune 以
 // refs + 暂存 index 为根删无引用对象，只清失败 add 的残骸、不碰 tag 快照
-export function pruneScript(store, gitExe) {
+export function pruneScript(store: ScriptStore, gitExe: string): string {
   return [
     'set -e',
     'git=' + psq(gitExe),
@@ -469,7 +471,7 @@ export function pruneScript(store, gitExe) {
 // 全程无 set -e + 逐步容错：清扫自身的失败不能抛。mtime 判定用 find -mmin
 // 而非 stat：GNU/BSD stat 参数不同（macOS bash 3.2 约束），find 的 -mmin
 // 两平台语义一致。
-export function killOrphansScript(gitDir) {
+export function killOrphansScript(gitDir: string): string {
   return [
     '# RECALL_CLEANUP',
     'g=' + psq(gitDir),
@@ -509,7 +511,7 @@ export function killOrphansScript(gitDir) {
 
 // 删除指定快照 tag（会话已删联动清理用）：tag -d 对不存在 tag 非零退出，
 // || true 吞掉——best-effort，残留 tag 由下次清理幂等收尾（同 pwsh 版）
-export function purgeTagsScript(store, gitExe, tags) {
+export function purgeTagsScript(store: ScriptStore, gitExe: string, tags: string[]): string {
   return [
     'git=' + psq(gitExe),
     'g=' + psq(store.git),
@@ -520,45 +522,45 @@ export function purgeTagsScript(store, gitExe, tags) {
 
 // 原子 rename（H2，语义见 pwsh 版同款注释）：mv -f 同卷 move 为 O(1) 元
 // 数据操作；也用于 loadIndex 把损坏索引改名 .corrupt-<ts> 保留现场。
-export function renameFileCmd(src, dst) {
+export function renameFileCmd(src: string, dst: string): string {
   return 'mv -f -- ' + psq(src) + ' ' + psq(dst)
 }
 
 // 任意长度文本写入（PF-2，语义见 pwsh 版同名注释）：stdin 传全文 + 单进程
 // 落盘。POSIX 原本就直写 stdin（cat > tmp 此前内联在 store.js，PF-2 起迁进
 // 模板统一走同名导出），bash 无编码/长度问题，模板本体就是这条 cat。
-export function fileWriteStdinCmd(file) {
+export function fileWriteStdinCmd(file: string): string {
   return 'cat > ' + psq(file)
 }
 
 // 索引读取（写入走 stdin：见 snapshots.js saveIndex 的 POSIX 分支，
 // 不经命令行传参，天然没有 32767/128KB argv 上限问题）
-export function indexReadCmd(dir) {
+export function indexReadCmd(dir: string): string {
   return 'cat ' + psq(dir + '/index.json') + ' 2>/dev/null || true'
 }
 
 // fork lineage 读取（F1，语义见 pwsh 版同款注释）：lineage.json 与 index.json
 // 同层、原子写；缺失文件输出空串。
-export function lineageReadCmd(dir) {
+export function lineageReadCmd(dir: string): string {
   return 'cat ' + psq(dir + '/lineage.json') + ' 2>/dev/null || true'
 }
 
 // 旧版项目内 blobs 目录清理（仅 home 存储可用时调用）
-export function legacyRmScript(path) {
+export function legacyRmScript(path: string): string {
   return 'rm -rf -- ' + psq(path)
 }
 
 // exclude.txt 原文读取（设置页编辑用）：缺失文件 cat 报错走 2>/dev/null ||
 // true 吞掉输出空串——与 pwsh 版同语义，按「尚未配置」处理；写入不走
 // 模板函数，调用方直接 cat > file + stdin（同 saveIndex 的 POSIX 分支）。
-export function excludeReadCmd(file) {
+export function excludeReadCmd(file: string): string {
   return 'cat ' + psq(file) + ' 2>/dev/null || true'
 }
 
 // 批量读全部 exclude 文件（PF-8，语义见 pwsh 版同注释）：内容 base64 单行
 // 输出（任意文本免疫定界混淆）。GNU base64 默认 76 字符折行、BSD（macOS）
 // 不折行且无 -w——统一 base64 | tr -d '\n' 兼容两侧；读失败输出空段。
-export function excludeDumpScript(files) {
+export function excludeDumpScript(files: string[]): string {
   const lines = []
   for (const f of files || []) {
     const q = psq(f)
@@ -573,12 +575,12 @@ export function excludeDumpScript(files) {
 
 // 目录存在探测：YES/NO 定长标记与 pwsh 版逐字同语义（容器路径本身在
 // JS 侧解析，POSIX 不需要 homeContainerScript 的 shell 版）。
-export function dirExistsScript(dir) {
+export function dirExistsScript(dir: string): string {
   return '[ -d ' + psq(dir) + ' ] && echo YES || echo NO'
 }
 
 // 影子仓库磁盘占用（设置页快照管理卡片用，语义同 pwsh 版）
-export function countObjectsScript(store, gitExe) {
+export function countObjectsScript(store: ScriptStore, gitExe: string): string {
   return [
     'git=' + psq(gitExe),
     'g=' + psq(store.git),
@@ -588,14 +590,14 @@ export function countObjectsScript(store, gitExe) {
 
 // 目录总大小（字节）：du -sk 取 KiB 再 ×1024；macOS/BSD du 与 GNU du
 // 对 -sk 的输出格式一致（"大小<TAB>路径"），awk 取首列最稳。
-export function diskUsageScript(dir) {
+export function diskUsageScript(dir: string): string {
   return 'du -sk ' + psq(dir) + ' 2>/dev/null | awk \'{print $1 * 1024}\''
 }
 
 // 列目录下所有一级子目录全路径：manage/list 枚举 home 容器下的所有
 // 哈希子目录用（每个子目录是一个工作区的 store）。find -maxdepth 1
 // 限定深度避免递归，2>/dev/null 容忍个别不可读条目。
-export function listSubdirsScript(dir) {
+export function listSubdirsScript(dir: string): string {
   return 'find ' + psq(dir) + ' -maxdepth 1 -mindepth 1 -type d 2>/dev/null'
 }
 
@@ -604,7 +606,7 @@ export function listSubdirsScript(dir) {
 // lineage.json（PF-4）。
 // bash 3.2 兼容：数组 + += 均可用，glob 无匹配时字面量经 [ -d ] 过滤。
 // root.txt 经 tr 去掉可能的 CRLF 再拼单行，防标记结构被打乱。
-export function storesDumpScript(container, extraDirs) {
+export function storesDumpScript(container: string, extraDirs: string[]): string {
   const lines = ['set -e', 'dirs=()']
   if (container) {
     lines.push('base=' + psq(container))

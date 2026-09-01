@@ -69,3 +69,31 @@ const _posixOnly: Record<PosixOnly, true> = { probeHomeScript: true, legacyHomeM
 | 签名与脚本-contract 单测漂移 | 以单测断言的 key 集合为核对清单，二者冲突时以运行现状为准修类型 |
 
 回退：两文件 + 两注释 + 一新文件，revert 即还原。
+
+## 实施记录
+
+> 2026-09-01 实施完成。基线 HEAD `d0e97e0`（M4 收口）。两模板 `git mv` 后仅函数签名行加类型标注（精确行匹配批量替换），模板体 diff 为空（红线复核：diff 仅签名行 + import + 注释）。
+
+### 逐项落地
+
+| 项 | 结果 |
+| --- | --- |
+| scripts.pwsh.ts 签名标注 | 28 个共享函数签名全部标注（psq 起至 storesDumpScript；store 参数 `ScriptStore`、base/tags/files/extraDirs `string[]`、maxChanges `number`、其余 `string`，返回全 `string`）；`import type { ScriptStore }` |
+| scripts.posix.ts 签名标注 | 30 个导出全部标注（28 共享 + probeHomeScript/legacyHomeMigrateScript）；diffScript 保持 5 参（契约声明 6 参，少参函数天然可赋值） |
+| 模板体零改动 | `git diff -M src/host/` 逐 hunk 过目：仅签名行/import/注释变化，模板字符串内容零 diff；产物逐字一致实证（freshness=0） |
+| types/scripts.ts 定稿核对 | 与 scripts-contract.test.js key 集合断言逐一相符：28 共享函数 + 5 共享常量 + 豁免集（pwsh 独有 homeDirScript、posix 独有 probeHomeScript/legacyHomeMigrateScript） |
+| tests/types/scripts-parity.test.ts | 新建（计划原文落实）；typecheck 消费 |
+| 豁免集三处同源 | store.js SKIP 旁 + scripts-contract.test.js SKIP 旁各加溯源注释（事实源 src/types/scripts.ts 平台专属接口），值未改 |
+
+### 验收证据
+
+| 验收项 | 结果 |
+| --- | --- |
+| `npm run typecheck`（含 tests/types 新断言） | 绿：exit 0；负例验证断言非空转——`Omit<PwshScripts,'homeDirScript'>` 赋给 PwshScripts 报 TS2741 |
+| `tests/unit/scripts-contract.test.js` | 绿（结构断言零改动，含 `--ignore-errors`、`g=` 约定、`:(top)` pathspec、哨兵行） |
+| `npm run build` 后 `git diff --exit-code lib/` | 退出码 0：pwsh/posix 产物从 .ts 转译输出与基线逐字一致 |
+| `npm test` 全量 | 绿：25 文件 290 例 |
+
+### 偏离与备注
+
+- 无计划偏离。签名标注用临时批量脚本（精确行匹配 + 校验 NOT FOUND 计数 28/28、30/30）执行后删除，git diff 复核兜底模板体零改动。

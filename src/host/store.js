@@ -158,6 +158,8 @@ export function createRuntime(ctx, config) {
     // 编码行为由探针钉死）；legacyHomeMigrateScript 仅 posix 版存在：
     // 旧容器迁移是 POSIX 漂移（I24）专属的存量数据兜底，win32 无此问题
     const SKIP = new Set(['homeDirScript', 'probeHomeScript', 'legacyHomeMigrateScript'])
+    // 豁免集事实源：src/types/scripts.ts 平台专属接口（PwshScripts/PosixScripts
+    // extends 差分）；本集合是它的运行时镜像，M5 起由 tests/types satisfies 编译期锁死
     const pwshKeys = Object.keys(pwshScripts).filter((k) => !SKIP.has(k) && typeof pwshScripts[k] === 'function')
     const posixKeys = Object.keys(posixScripts).filter((k) => !SKIP.has(k) && typeof posixScripts[k] === 'function')
     const missing = pwshKeys.filter((k) => posixKeys.indexOf(k) < 0)
