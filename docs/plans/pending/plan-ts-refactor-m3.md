@@ -83,3 +83,37 @@ export type RawConfig = Partial<ResolvedConfig>
 | 类型过宽（到处 any）失去意义 | 评审 checklist：unknown 优于 any；any 出现处必须注释理由 |
 
 回退：纯新增目录，`git rm -r src/types` 即还原，零运行时面。
+
+## 实施记录
+
+> 2026-09-01 实施完成。基线 HEAD `339f4ba`（M2 收口）。纯增量：`src/types/` 七文件 + `ambient-modules.d.ts`，`ambient.d.ts` 删除，零运行时代码触碰。
+
+### 七个类型文件（事实来源逐一回链）
+
+| 文件 | 事实来源 | 备注 |
+| --- | --- | --- |
+| `config.ts` | src/host/config.js Config schema + DEFAULTS | ResolvedConfig/RawConfig；M4 起标注 createConfig/DEFAULTS |
+| `payloads.ts` | snapshots.js 读写路径 + snapshots-persist.test.js + dump-parse.js | SnapshotFeedback 联合（failed/skipped 互斥）、IndexEntry、LineageEntry、RootRecord、ExcludeFile；EnvErrorKind/FeedbackKind 内联占位（M4 改 import type） |
+| `state.ts` | store.js createRuntime state 块（字段一一对应）+ index.js rt 消费面 | SharedState + StoreInfo/SnapshotInfo/ErrorRecord + Runtime 骨架（M6 定稿） |
+| `scripts.ts` | 两模板导出名单逐文件核实 | 28 共享函数 + 5 共享常量 + 哨兵字面量；PwshScripts(+homeDirScript)/PosixScripts(+probeHomeScript/legacyHomeMigrateScript) |
+| `dsh-contract.ts` | docs/dsh-contract.md §1/§3/§4 | Host 服务接口 + 51 事件类型联合 + 事件信封；schemastery/dsh-settings ambient 见下 |
+| `client-contract.ts` | dsh-contract.md §二（52 slot）+ src/client 现状 | SlotName 联合、ChatNodeProps（node/renderMessageImages/sessionId）、__ModuleLoader__ declare global、conversation/styles 可选探测、ClientContext |
+| `api.ts` | routes-core/routes-manage 端点表 + errors.js | 12 端点请求/响应 + errBody；ErrorCode 内联 18 码（M4 as const 后改引用） |
+
+### 偏离（1 项，已在文档结构落实）
+
+- **ambient 拆独立文件**：`declare module` 在带顶层 import 的模块文件（dsh-contract.ts 有 `import type`）里是 module augmentation，TS 禁在其内 export 新符号（TS2666，实测报错）。两个私有 peer 包的环境模块声明因此移入全局脚本文件 `src/types/ambient-modules.d.ts`（无 import/export），dsh-contract.ts 保留全部类型面并在注释中回链该文件。计划原文「ambient.d.ts 已删除，dsh-contract.ts 接管」落实为「ambient.d.ts 删除、ambient-modules.d.ts 接管 + dsh-contract.ts 类型面」，语义不变（依赖面仍单一类型源）。
+
+### 验收证据
+
+| 验收项 | 结果 |
+| --- | --- |
+| `tsc --noEmit` | 绿：exit 0（修正 TS2666/TS2300 后；两处报错均为 declare module 迁移所致，见偏离） |
+| 零运行时值导出 | `grep "export const" src/types/` 为零；仅 ambient-modules.d.ts 内 `declare module` 块含 `export function`（环境声明，非运行时导出） |
+| ambient.d.ts 已删除 | 已删，被 ambient-modules.d.ts + dsh-contract.ts 取代 |
+| `npm test` | 绿：25 文件 290 例（连续 4 次复跑稳定） |
+| build 新鲜度 | `npm run build` 后 `git diff --exit-code lib/` 退出码 0（类型文件不参与 host 构建，产物零变化） |
+
+### 环境备注
+
+- 首次合并跑「npm test + npm run build」时单测出现过一次瞬时 1 文件失败/3 skipped（该次运行耗时 14.8s，为正常 3 倍，疑似系统负载），其后 4 次复跑全绿（290/290）。本阶段零运行时代码改动，判定为环境性 flake，非回归。若后续复现，排查方向：package-layout 的 npm pack 在重负载下偶发超时。
