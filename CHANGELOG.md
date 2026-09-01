@@ -4,7 +4,12 @@
 
 ## [Unreleased]
 
-开发工具链与兼容性台账增强（无运行时行为变更，不发版）。
+修复批次（PR #13 贡献，macOS 实机验证）+ 开发工具链与兼容性台账增强。
+
+### 修复
+
+- **兼容 dsh-turn-fold 的用户消息渲染槽位**：`conversation.chat.node` 的 `user` key 改为在槽位回调实际执行时读取已占用的 priority，并自动选择当前最低 priority 再低一级，避免与 `dsh-turn-fold` 等第三方插件固定占用 `-1` 时发生冲突；其他插件继续占用更低 priority 时也会自动避让。
+- **POSIX diff awk 程序多余点号导致预览/回退失败**：`lib/scripts.posix.js` 的 `diffScript` 中 awk 程序起始引号后混入多余 `.`（v2.2.0 随 PF-1 引入），awk 报语法错误退出非零，macOS/Linux 上点「撤回」预览即失败、无法回退；Windows 走 pwsh 路径不受影响，故此前仅 Windows 冒烟未暴露。
 
 ### 变更
 

@@ -12,6 +12,16 @@ import { buildUtil } from './util.js'
 import { buildRecallNode } from './recall-node.js'
 import { buildSettingsCards } from './settings-cards.js'
 
+export function nextShadowPriority(entries, key) {
+  let priority = -1
+  for (const entry of Array.isArray(entries) ? entries : []) {
+    if (!entry || !entry.options || entry.options.key !== key) continue
+    const occupied = Number.isFinite(entry.options.priority) ? entry.options.priority : 0
+    if (occupied <= priority) priority = occupied - 1
+  }
+  return priority
+}
+
 export function createApp(React) {
   return function apply(ctx) {
     // 0.1.2 起 client runner 用 guard facade 包 ctx：只有插件对象 inject 数组
@@ -42,26 +52,25 @@ export function createApp(React) {
     const { UserRecallNode } = buildRecallNode(React, util, ctx, sessionsSvc, workspacesSvc)
     const { RecallSettingsCard } = buildSettingsCards(React, util, sessionsSvc)
 
-    // keyed slot 显式用低于默认 0 的 priority 注册：默认 0 通常被平台/其他
-    // 插件的渲染器占据，不指定 priority 会因 keyed slot 冲突拒载整个插件；
-    // lowest renders，负值恰好覆盖默认渲染器实现撤回 UI。priority -1 也可能
-    // 被别的机器上的插件占用（同样抛冲突），所以递减重试三次——最坏情况只是
-    // 撤回按钮不渲染，绝不让插件加载失败。chat.node 的 keyed key 与节点 UI
-    // 投影 kind 对齐：'user' 是常规用户消息；'steering' 是 agent 运行中插入
-    // 的转向指令——官方仍按用户气泡回显，但 keyed 'user' 不命中，会落到默认
-    // 渲染、撤回按钮缺失。两个 key 各自独立注册，互不抢占。
+    // conversation.chat.node 是 keyed slot，同一 key 的最低 priority 渲染。
+    // 默认平台渲染器通常为 0，dsh-turn-fold 等插件可能已占 -1；旧实现固定
+    // 尝试 -1..-3，但 slots.inject 的回调可能晚于 inject 返回才执行，冲突异常
+    // 无法被外层 try/catch 可靠捕获，实际不会继续重试。改为在 slot 回调真正
+    // 执行时读取现有 entries，为每个 key 动态选择“当前最低值 - 1”，因此既能
+    // 覆盖默认渲染器，也能避开任意第三方插件已占用的负 priority。
+    // chat.node 的 keyed key 与节点 UI 投影 kind 对齐：'user' 是常规用户消息；
+    // 'steering' 是 agent 运行中插入的转向指令。两个 key 独立计算，互不抢占。
     for (const slotKey of ['user', 'steering']) {
-      let mounted = false
-      for (let priority = -1; priority >= -3 && !mounted; priority--) {
-        try {
-          slots.inject('conversation.chat.node', () => slots.register(
+      try {
+        slots.inject('conversation.chat.node', () => {
+          const priority = nextShadowPriority(slots.entries('conversation.chat.node'), slotKey)
+          return slots.register(
             { name: 'conversation.chat.node', key: slotKey, priority },
             UserRecallNode
-          ))
-          mounted = true
-        } catch (error) {
-          if (priority === -3) console.error('[dsh-recall-plugin] slot register failed (' + slotKey + '):', error)
-        }
+          )
+        })
+      } catch (error) {
+        console.error('[dsh-recall-plugin] slot register failed (' + slotKey + '):', error)
       }
     }
 

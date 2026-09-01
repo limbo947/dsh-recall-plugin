@@ -12,8 +12,41 @@ import { describe, it, expect } from 'vitest'
 import { buildTree, clockText, sizeText, bytesToMb } from '../../src/client/util.js'
 import { KIND_INFO, summaryText } from '../../src/client/recall-node.js'
 import { groupByLineage } from '../../src/client/settings-cards.js'
+import { nextShadowPriority } from '../../src/client/app.js'
 
 describe('client 纯逻辑', () => {
+  it('nextShadowPriority：无同 key 时从 -1 开始', () => {
+    expect(nextShadowPriority([], 'user')).toBe(-1)
+  })
+
+  it('nextShadowPriority：避开同 key 已占用的最低优先级', () => {
+    expect(nextShadowPriority([
+      { options: { key: 'user', priority: 0 } },
+      { options: { key: 'user', priority: -1 } },
+      { options: { key: 'steering', priority: -7 } },
+    ], 'user')).toBe(-2)
+  })
+
+  it('nextShadowPriority：连续冲突时继续向更低优先级移动', () => {
+    expect(nextShadowPriority([
+      { options: { key: 'user', priority: -1 } },
+      { options: { key: 'user', priority: -2 } },
+      { options: { key: 'user', priority: -3 } },
+    ], 'user')).toBe(-4)
+  })
+
+  it('nextShadowPriority：缺失或非法 priority 按默认 0 处理', () => {
+    expect(nextShadowPriority([
+      { options: { key: 'user' } },
+      { options: { key: 'user', priority: 'bad' } },
+    ], 'user')).toBe(-1)
+  })
+
+  it('nextShadowPriority：空/非法 entries 不阻断计算', () => {
+    expect(nextShadowPriority(null, 'user')).toBe(-1)
+    expect(nextShadowPriority([null, {}, { options: null }], 'user')).toBe(-1)
+  })
+
   it('buildTree：按工作区/会话分组，未知归属进「未知」节点', () => {
     const tree = buildTree([
       { root: '/ws1', workspace: 'ws1', sessionId: 's1', sessionTitle: 'S1', time: 2, id: 'a' },

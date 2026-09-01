@@ -2,13 +2,11 @@
 
 简体中文 | [English](README.en.md)
 
-![npm](https://img.shields.io/npm/v/dsh-recall-plugin?label=npm&color=cb3837)
+[![npm version](https://img.shields.io/npm/v/dsh-recall-plugin.svg)](https://www.npmjs.com/package/dsh-recall-plugin)
+[![npm downloads](https://img.shields.io/npm/dm/dsh-recall-plugin.svg)](https://www.npmjs.com/package/dsh-recall-plugin)
 ![License](https://img.shields.io/badge/license-MIT-blue)
-![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux%20%7C%20macOS-blue)
-![Build](https://img.shields.io/badge/%E7%BA%AFJS-green)
-
-![DSH](https://img.shields.io/badge/DSH-0.1.1--rc.2-blue)
-![DSH](https://img.shields.io/badge/DSH-0.1.2--alpha.2-red)
+[![DSH](https://img.shields.io/badge/DSH-0.1.1--rc.2-blue)](https://github.com/deepseek-ai/deepseek-harness/releases/tag/dsh-v0.1.1-rc.2)
+[![DSH](https://img.shields.io/badge/DSH-0.1.2--alpha.3-red)](https://github.com/deepseek-ai/deepseek-harness/releases/tag/dsh-v0.1.2-alpha.3)
 ---
 **在任意一条你发过的消息下方**，**点「↶ 撤回」**，**工作区文件和对话历史一起回到那条消息发出之前的状态**（DSH 0.1.1-rc.2）。
 ---
