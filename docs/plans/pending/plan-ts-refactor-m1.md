@@ -101,3 +101,30 @@ declare module '@deepseek-ai/dsh-settings'
 | `@types/node` 版本与 Node 20 运行时不符 | 钉 `^20`，与 engines `>=20`、build target `node20` 对齐 |
 
 回退：整阶段单 commit，`git revert` 即还原（package.json/tsconfig/ci.yml/ambient.d.ts 均为新增或单行改）。
+
+## 实施记录
+
+> 2026-09-01 实施完成。基线 HEAD `2224bd8`（v3.2 计划族评审修订先于本阶段单独 commit 入库）。
+
+### 豁免清单（M1 建档，对应阶段清零）
+
+| 文件 | 处置 | 清零阶段 | 说明 |
+| --- | --- | --- | --- |
+| `lib/store.js` | `// @ts-nocheck` | M6（store.ts 迁移） | rt.scripts 为平台二选一模块联合，`homeDirScript`/`probeHomeScript` 平台专属成员在联合上不可达（store.js:305/325），属 scripts 契约已知形态，M5 类型侧锁死后 M6 以契约类型收口 |
+| `src/client/entry.js` | `// @ts-nocheck` | M7（entry.ts 迁移） | `window.__ModuleLoader__` 全局未建档，M3 client-contract.ts `declare global` 补齐 |
+
+另：`lib/diagnostics.js` ENV_PATTERNS 补 `/** @type {Array<[string, RegExp[]]>} */`（真实 JSDoc 标注，非豁免——异构数组字面量被推断为 `(string | RegExp)[]`，classifyEnvError 内 `p.test(s)` 报 TS2339）。
+
+### 验收证据
+
+| 验收项 | 结果 |
+| --- | --- |
+| `npm run typecheck` | 绿，退出码 0，零错误零警告（宽松基线） |
+| `npm test` | 绿：25 文件 290 例全过（Test Files 25 passed / Tests 290 passed） |
+| `npm run test:probe` | 绿：2 文件 31 例全过（本机可跑） |
+| CI Typecheck 步先于 Unit tests | 已写入 ci.yml（Typecheck 置于 Unit tests 之前） |
+
+### 环境备注
+
+- `npm i -D typescript@^5 @types/node@^20 @types/react@^18 --legacy-peer-deps` 实际安装 typescript 5.9.3 / @types/node 20.19.43 / @types/react 18.3.31；npm 清理了 node_modules 下 `@deepseek-ai/{schemastery,dsh-settings}` junction，已按 AGENTS.md 命令重建（dsh 安装目录链接）。
+- 红线复核：`grep -rn "@ts-ignore" src/ lib/` 为零；临时豁免仅上述两处 ts-nocheck 且均带清零阶段注释。

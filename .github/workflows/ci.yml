@@ -19,6 +19,9 @@ jobs:
         # 项目 peerDeps 是私有 @deepseek-ai 包（CI 不可得），--legacy-peer-deps
         # 跳过、只装 devDependencies（vitest）；发布仍走现有手动流程。
         run: npm ci --legacy-peer-deps
+      - name: Typecheck
+        # 置于单测之前：tests/types 编译期断言（M3 起）漏跑即假绿，顺序写死
+        run: npm run typecheck
       - name: Unit tests
         # 单测里的 package-layout.test.js 已跑 npm pack --dry-run 断言包内容，
         # 无需单独 shell 步骤（计划原文：测试形式比 shell 步骤更可移植）。
