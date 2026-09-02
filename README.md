@@ -3,7 +3,7 @@
 简体中文 | [English](README.en.md)
 
 [![npm version](https://img.shields.io/npm/v/dsh-recall-plugin.svg)](https://www.npmjs.com/package/dsh-recall-plugin)
-[![npm downloads](https://img.shields.io/npm/dm/dsh-recall-plugin.svg)](https://www.npmjs.com/package/dsh-recall-plugin)
+[![npm downloads](https://img.shields.io/npm/dt/dsh-recall-plugin.svg)](https://www.npmjs.com/package/dsh-recall-plugin)
 ![License](https://img.shields.io/badge/license-MIT-blue)
 [![DSH](https://img.shields.io/badge/DSH-0.1.1--rc.2-blue)](https://github.com/deepseek-ai/deepseek-harness/releases/tag/dsh-v0.1.1-rc.2)
 [![DSH](https://img.shields.io/badge/DSH-0.1.2--alpha.3-red)](https://github.com/deepseek-ai/deepseek-harness/releases/tag/dsh-v0.1.2-alpha.3)
