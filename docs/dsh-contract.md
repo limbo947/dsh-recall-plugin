@@ -2,7 +2,7 @@
 
 > 插件视角的官方（deepseek-harness）API 契约参考：插件**依赖面**逐项给出签名与核验状态，插件**未依赖面**给出全量清单与一句话说明。
 >
-> * 对应版本：**dsh 0.1.2-alpha.2**（tag `dsh-v0.1.2-alpha.2`，commit `0a53fb5`，2026-08-30 发布；alpha.1 基线 `cd5ef81` 已并入）
+> * 对应版本：**dsh 0.1.2-rc.1**（tag `dsh-v0.1.2-rc.1`，commit `a66e4702`，2026-09-03 发布；rc 前基线 alpha.5 `db6bdc35`、alpha.4 `4e84901e` 已并入）
 >
 > * 来源：官方源码直接核验（本机构建检出在 `D:\workspace\dsh-plugin\deepseek-harness`），非文档转述——**遇字段争议一律以** **`.d.ts`/源码为准**（AGENTS.md 合规清单 #8）
 >
@@ -340,4 +340,24 @@ web/deepseek-search-llm-request
 > ② settings 独立函数 `installSettingsSection` **移除** → `SettingsProvider.installSection` 方法（bash-local/pwsh-local 同款迁移），插件 `src/host/index.ts` 双版本兼容分支已加、verify-host 桩补 installSection（§1.1 settings 段已改）；
 > ③ `conversation.chat.node` 声明位置：alpha.2 已实装在 `dsh-client-ui-chat`（alpha.1 镜像同包），探针路径更新为双包探测（§1.2 已改）；
 > ④ 其余（插件列表分组、Node 24 启动修复、RemoteError 封装、peer 优化）与插件依赖面无交集。机器化断言：`test:probe` 17/17 绿、`verify:host` 全绿、`check:dsh` 仅镜像漂移（reference 已重拉更新）。
+>
+> **0.1.2-alpha.3 / alpha.4 升级核查（2026-09-02）**：`npm install -g @deepseek-ai/dsh@alpha` 实装 alpha.4，
+> 关键产物证据链抽查无漂移——fork 签名逐字一致（§1.1 sessions）、`renderMessageImages` 仍为图片唯一入口
+> （§1.2 chat.node）、`SettingsProvider.installSection` 导出面未再变（§1.1 settings）、SessionHeader 仍无 title
+> （§1.1 sessionQuery）。逐条核验结论见 compat-audit.md 头部 alpha.4 核验段；机器化断言：`check:upgrade`
+> 三层门禁全绿（check:dsh 漂移一致 + test:probe 31/31 + verify:host 装配断言通过）。本文件头部「对应版本」
+> 已同步，本段与探针/verify-host 构成防漂移闭环——升级后 `npm run check:dsh` 捕获文档版本未同步即报红。
+>
+> **0.1.2-rc.1 升级核查（2026-09-03）**：`npm install -g @deepseek-ai/dsh@next` 实装 rc.1（候选发布版，
+> 相对 alpha 线代码冻结，另发 alpha.5 基线）。关键产物证据链抽查无漂移——fork 签名逐字一致（§1.1 sessions）、
+> renderMessageImages / ChatNodeKind 全集未变（§1.2 chat.node，探针 kind 断言全绿）、
+> `SettingsProvider.installSection` 导出面未再变（§1.1 settings）、SessionHeader 仍无 title（§1.1 sessionQuery）、
+> guard 的 shadowing priority 分配不变（I29）。**唯一注意点**：fork JSDoc 语义澄清——cut 边界取
+> `atSeq` 之后第一次 `turn/end`（at-or-after），且 open turn 内的锚点「不可用而非向后裁剪」；
+> 插件 `resolveCutSeq` 传的 cutSeq 本就是该消息之前最近一次 `turn/end` 的 seq，取 at-or-after 时
+> 若锚点落在 open turn（运行中的 agent 回合）官方会拒 fork 而非裁剪——撤回触发时若目标消息位于
+> 运行中回合内需留意（P0-1 agentBusy 拦截已挡运行中撤回，实际触发面小）。逐条结论见 compat-audit.md
+> 头部 rc.1 核验段；机器化断言：`check:upgrade` 三层门禁全绿（check:dsh 漂移一致 + test:probe 31/31
+>
+> * verify:host 装配断言通过）。
 

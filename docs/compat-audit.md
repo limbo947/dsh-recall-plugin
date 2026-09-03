@@ -7,6 +7,31 @@
 >
 > 出处标注为 2026-09-01 核验（alpha.3）；每次 dsh 升级后按「复查动作」更新本节「核验日期」。
 >
+> **0.1.2-alpha.4 核验（2026-09-02）**：`npm install -g @deepseek-ai/dsh@alpha`
+> 实装 alpha.4，reference/ 镜像重拉至 alpha.4 归档（13 文件，映射表未变），
+> `npm run check:upgrade` 三层门禁全绿（check:dsh 漂移一致 +
+> test:probe 31/31 + verify:host 装配断言通过）。逐条抽查关键产物证据链：
+> I1/I29 `dsh-cordis-client-runner/lib/types/client/guard.d.ts` register 代理仍分配
+> shadowing priority（allocatePriority 签名未变）；I2 `dsh-client-ui-chat/.../slots.d.ts`
+> ChatNodeOwnerProps.renderMessageImages 仍在；I4 conversation.d.ts node.id/key 语义不变；
+> I6 `dsh-api-session-controller/.../sessions.d.ts` fork 签名逐字一致
+> （`fork({sessionId, atSeq?, increaseTitle?})`）；I28 SessionHeader 仍无 title
+> （title 折叠自 session/title 事件）；I30 dsh-settings 仍只暴露 `installSection`
+> （`installSettingsSection` 未回归）。结论：无插件破坏性变更，无需改码，
+> 升级后 `test:probe` 与 `verify:host` 机器化盯防继续有效。
+>
+> **0.1.2-rc.1 核验（2026-09-03）**：`npm install -g @deepseek-ai/dsh@next` 实装 rc.1
+> （候选发布版，相对 alpha 线代码冻结；alpha tag 已升至 alpha.5 基线），reference/ 镜像
+> 重拉归档（映射表未变），`npm run check:upgrade` 三层门禁全绿（check:dsh 漂移一致 +
+> test:probe 31/31 + verify:host 装配断言通过）。重查关键产物证据链：
+> I1/I29 guard.d.ts shadowing priority 分配不变；I2 renderMessageImages 仍在、I5
+> ChatNodeKind 全集探针断言全绿；I4 node.id/key 语义不变；I6 fork 签名逐字一致
+> （`fork({sessionId, atSeq?, increaseTitle?})`）——**JSDoc 语义澄清**：cut 边界取
+> `atSeq` 之后第一次 `turn/end`（at-or-after），open turn 内锚点「不可用而非向后裁剪」，
+> 已写入 I6 条目与 dsh-contract §1.1（resolveCutSeq 传最近 turn/end 语义兼容，运行中
+> 回合由 P0-1 agentBusy 拦截兜底）；I28 SessionHeader 仍无 title；I30 installSection 未回归。
+> 结论：无插件破坏性变更，无需改码。
+>
 > **0.1.2-alpha.2 核验（2026-08-31）**：新增 I30（settings 辅助函数移除）；
 > I1/I2/I4/I5 的 chat.node 出处均为 ui-chat 包（探针已改双包探测）；事件信封
 > `ignorable` 在 alpha.2 恢复（§1.3，插件不读无影响）；其余矩阵条目复查无漂移。
@@ -131,6 +156,14 @@
   `CreateSessionOptions.seed`（种子回放），无 fork 方法。本项目撤回走
   `fork({ sessionId, atSeq })` 对象形态（src/client/recall-node.ts），与契约逐字
   匹配，探针钉住。
+
+  **0.1.2-rc.1 语义澄清（2026-09-03）**：JSDoc 明示 cut 边界语义——boundary 是
+  `atSeq` 处或之后第一次 `turn/end`（at-or-after），且当锚点在 open turn 内时
+  「不可用而非向后裁剪」（fork 决议失败而非改绑前一个 turn/end）。与插件
+  `resolveCutSeq`（取目标消息之前最近一次 turn/end 的 seq 传入）语义兼容：
+  传的 seq 本身即 turn/end 则 at-or-after 命中同一点；唯一差异场景是目标消息
+  位于运行中的回合内（无已闭合 turn/end）——官方拒绝 fork 而非裁剪，P0-1
+  agentBusy 拦截已挡运行中撤回，实际触发面小。签名与探针零变化，无需改码。
 
 ### I7 archiveSession 语义：归档 = 从分组表面隐藏（F1 lineage 链断裂根因）
 - **依赖的官方行为**：`archiveSession(sessionId)` 把会话移入 registry-global set，
