@@ -1,4 +1,4 @@
-# dsh-recall-plugin
+# dsh-recall-plugin ![awesome · DSH plugin](https://awesome-dsh-plugin.com/badge.svg)
 
 简体中文 | [English](README.en.md)
 
@@ -7,7 +7,7 @@
 ![License](https://img.shields.io/badge/license-MIT-blue)
 [![DSH](https://img.shields.io/badge/DSH-0.1.2--rc.1-blue)](https://github.com/deepseek-ai/deepseek-harness/releases/tag/dsh-v0.1.2-rc.1)
 ---
-**在任意一条你发过的消息下方**，**点「↶ 撤回」**，**工作区文件和对话历史一起回到那条消息发出之前的状态**（DSH 0.1.1-rc.2）。
+**在任意一条你发过的消息下方**，**点「↶ 撤回」**，**工作区文件和对话历史一起回到那条消息发出之前的状态**
 ---
 
 [更新日志](CHANGELOG.md)
