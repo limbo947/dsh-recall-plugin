@@ -357,7 +357,5 @@ web/deepseek-search-llm-request
 > 插件 `resolveCutSeq` 传的 cutSeq 本就是该消息之前最近一次 `turn/end` 的 seq，取 at-or-after 时
 > 若锚点落在 open turn（运行中的 agent 回合）官方会拒 fork 而非裁剪——撤回触发时若目标消息位于
 > 运行中回合内需留意（P0-1 agentBusy 拦截已挡运行中撤回，实际触发面小）。逐条结论见 compat-audit.md
-> 头部 rc.1 核验段；机器化断言：`check:upgrade` 三层门禁全绿（check:dsh 漂移一致 + test:probe 31/31
->
-> * verify:host 装配断言通过）。
+> 头部 rc.1 核验段；机器化断言：`check:upgrade` 三层门禁全绿（check:dsh 漂移一致 + test:probe 31/31 + verify:host 装配断言通过）。
 
