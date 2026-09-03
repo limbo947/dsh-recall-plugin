@@ -8,16 +8,18 @@
  *
  *   1. 本地已装 dsh 版本 vs reference/README.md「归档 dsh 版本」——镜像
  *      漂移哨兵（重拉镜像后该字段必须同步更新，见 reference/README.md）；
- *   2. npm 最新 @deepseek-ai/dsh 版本 vs package.json peerDependencies
+ *   2. 本地已装 dsh 版本 vs docs/dsh-contract.md「对应版本」——契约文档
+ *      漂移哨兵（升级后契约文档未同步即此处报红，逼人按文档第七节重核）；
+ *   3. npm 最新 @deepseek-ai/dsh 版本 vs package.json peerDependencies
  *      范围——peer 兼容性提醒（最新版越界即该扩范围/重核验）；
- *   3. npm 最新 vs 本地已装——提示有新版可升（升级后镜像基准自然漂移，
+ *   4. npm 最新 vs 本地已装——提示有新版可升（升级后镜像基准自然漂移，
  *      由第 1 层在下次运行捕获）。
  *
  * 一致时安静退出（exit 0，一行确认）；任一差异输出 ✓/⚠/✗ 行并 exit 1。
  * 纯函数全部导出供 vitest 单测（tests/unit/check-dsh-version.test.js），
  * 避免"巡检脚本自身逻辑无测试"的二次漂移。环境变量 DSH_CHECK_LOCAL /
- * DSH_CHECK_MIRROR / DSH_CHECK_LATEST 可覆盖对应输入（演示/测试用，
- * 见脚本头注释），不修改任何文件。
+ * DSH_CHECK_MIRROR / DSH_CHECK_CONTRACT / DSH_CHECK_LATEST 可覆盖对应输入
+ * （演示/测试用，见脚本头注释），不修改任何文件。
  *
  * 范围解析只支持本项目 peer 实际使用的 `^x.y.z[-pre]`、`~x.y.z[-pre]` 与
  * 精确 `x.y.z[-pre]` 三种形态（package.json 现状全为 ^）；遇到不认识的范围
@@ -242,13 +244,36 @@ export function readMirrorVersion() {
   }
 }
 
+/** 从 docs/dsh-contract.md 头部文本提取「对应版本：dsh x.y.z」；字段缺失
+ * 返回 null。纯函数（单测直接钉）；readContractVersion 负责读文件后复用。
+ * 为何放头部：契约文档第七节把版本重核写成了「升级后必做」，但缺一个可执行
+ * 哨兵——头部版本字段停在旧版时下文随手改、没人发现。版本字段跟着契约文档
+ * 修订走，单一更新点，check:dsh 捕获漂移后逼人按第七节流程重核。 */
+export function parseContractVersion(text) {
+  if (typeof text !== 'string') return null
+  const m = /对应版本[:：]\s*[*]*\s*dsh\s*(v?\d+\.\d+\.\d+(?:-[0-9A-Za-z][0-9A-Za-z.-]*)?)/.exec(text)
+  return m ? m[1] : null
+}
+
+/** 读 docs/dsh-contract.md 并提取「对应版本」；文件不存在/读取失败返回 null
+ * （文档尚未创建的早期形态自然降级，由巡检提示补写字段）。 */
+export function readContractVersion() {
+  const file = path.join(ROOT, 'docs', 'dsh-contract.md')
+  if (!fs.existsSync(file)) return null
+  try {
+    return parseContractVersion(fs.readFileSync(file, 'utf8'))
+  } catch {
+    return null
+  }
+}
+
 // ---- 报告组装（纯函数，单测直接钉） ----
 
 /**
  * 组装巡检报告。peers 元素：{name, range, installed}（installed 可为 null）。
  * 返回 {ok, lines, exitCode}——ok=false 时 exitCode=1（提醒可见/可接脚本）。
  */
-export function buildReport({ local, mirror, latest, peers }) {
+export function buildReport({ local, mirror, contract, latest, peers }) {
   const lines = []
   let ok = true
   lines.push('[dsh-recall-plugin] dsh 版本巡检（npm run check:dsh）')
@@ -274,6 +299,23 @@ export function buildReport({ local, mirror, latest, peers }) {
     }
   } else {
     lines.push('  ⚠ reference/README.md 未记录「归档 dsh 版本」字段（重拉镜像后请补写）')
+    ok = false
+  }
+
+  if (contract) {
+    if (local && local !== contract) {
+      lines.push(`  ⚠ 契约文档漂移: 本地 dsh ${local} ≠ dsh-contract.md 记录 ${contract}`)
+      lines.push('      → 按 docs/dsh-contract.md 第七节指引重核契约（类型源 diff 核对法），同步「对应版本」字段')
+      ok = false
+    } else if (local) {
+      lines.push(`  ✓ docs/dsh-contract.md 记录: ${contract}（与本地 dsh 一致）`)
+    } else {
+      // 本地 dsh 未找到时也要展示契约记录，否则 contract 行静默消失、
+      // 用户看不到比对基准是什么（与 mirror 分支同款取舍）
+      lines.push(`  ✓ docs/dsh-contract.md 记录: ${contract}（本地 dsh 未找到，无法比对漂移）`)
+    }
+  } else {
+    lines.push('  ⚠ docs/dsh-contract.md 未记录「对应版本」字段（升级后请按第七节补写）')
     ok = false
   }
 
@@ -344,9 +386,10 @@ export function main() {
   // env 覆盖是给演示/测试用的注入点（文档见文件头），不写回任何文件
   const local = process.env.DSH_CHECK_LOCAL || findDshVersion()
   const mirror = process.env.DSH_CHECK_MIRROR || readMirrorVersion()
+  const contract = process.env.DSH_CHECK_CONTRACT || readContractVersion()
   const latest = process.env.DSH_CHECK_LATEST || fetchLatestDshVersion()
   const peers = buildPeers()
-  const { lines, exitCode } = buildReport({ local, mirror, latest, peers })
+  const { lines, exitCode } = buildReport({ local, mirror, contract, latest, peers })
   for (const line of lines) console.log(line)
   process.exitCode = exitCode
 }

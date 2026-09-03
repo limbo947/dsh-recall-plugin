@@ -5,12 +5,13 @@
  * 背景：test:probe（官方字段探针）与 verify:host（装配门禁）依赖本机 dsh 安装，
  * 不进 CI——升级后跑不跑全凭人记，忘了跑探针第一道防线就失效。本脚本把
  * dsh 升级后的三层机器化核验串成一条命令：
- *   1. check:dsh — 版本巡检（本地 dsh vs reference 镜像、npm 最新 vs peer 范围）；
+ *   1. check:dsh — 版本巡检（四层比对：本地 dsh vs reference 镜像、本地 dsh vs
+ *      docs/dsh-contract.md 契约文档、npm 最新 dsh vs peer 范围、npm 最新 vs 本地）；
  *   2. test:probe — 官方 API 字段探针（I2/I5/I6/I8/I27/I28 等，读本机 .d.ts）；
  *   3. verify:host — 装配门禁（inject 声明/端点注册/Config schema/settings 接入）。
  * 任一层失败即 exit 1，并在输出中提示按 compat-audit.md「复查动作」定点复查；
  * 全绿则提示在 compat-audit.md 头部追加核验记录（日期/版本/结果/漂移结论），
- * 并同步 reference/README.md 归档版本字段。
+ * 并同步 reference/README.md 归档版本字段与 docs/dsh-contract.md「对应版本」。
  *
  * 定位：本地开发门禁，不进 CI（与 test:probe/verify:host 同语义——无 dsh 的
  * 环境跑 check:dsh 与 probe 仍可整体通过/跳过，verify:host 无 dsh 自动 skip）。
@@ -24,7 +25,7 @@ const here = path.dirname(fileURLToPath(import.meta.url))
 const root = path.join(here, '..')
 
 const steps = [
-  { name: 'check:dsh（版本巡检 / 镜像漂移比对）', script: 'check:dsh' },
+  { name: 'check:dsh（版本巡检 / 镜像 + 契约文档漂移比对）', script: 'check:dsh' },
   { name: 'test:probe（官方 API 字段探针）', script: 'test:probe' },
   { name: 'verify:host（装配门禁）', script: 'verify:host' },
 ]
@@ -58,6 +59,7 @@ if (failed) {
 console.log('\n[check-upgrade] 三层门禁全绿。')
 console.log('下一步（人工，必做）：')
 console.log('1. 在 docs/compat-audit.md 头部追加核验记录：日期 + 归档 dsh 版本 +')
-console.log('   本命令结果 + I1-I30 逐条漂移结论（参考既有 alpha.3 核验段落格式）；')
-console.log('2. 同步 reference/README.md 头部「归档日期 / 归档 dsh 版本」两个字段；')
-console.log('3. 若有官方 API 假设变化，同步 AGENTS.md 合规清单与本文台账。')
+console.log('   本命令结果 + I1-I31 逐条漂移结论（参考既有 alpha.4 核验段落格式）；')
+console.log('2. 同步 reference/README.md 头部「归档日期 / 归档 dsh 版本」字段，')
+console.log('   同步 docs/dsh-contract.md 头部「对应版本」字段；')
+console.log('3. 若有官方 API 假设变化，同步 AGENTS.md 合规清单、docs/dsh-contract.md 正文与本文台账。')
