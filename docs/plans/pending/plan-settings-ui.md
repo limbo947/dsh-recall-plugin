@@ -148,6 +148,14 @@ css.ts（disabled / 骨架样式）；settings-cards.ts（三处卡片状态逻�
 
 - 消退定时器与手动操作的竞态：以「最后一次 setState 为准」，timer 只清 success 类消息；逻辑简单，若抽到可测层则补单测。
 
+### 实施记录（2026-09-04）
+
+- 任务 1 禁用态：`.dsh-recall-btn:disabled` / `.dsh-recall-ex-chip:disabled` 补 `opacity:.5;cursor:default`，disabled 时 hover 颜色被单独规则钉回中性（`.btn:disabled:hover` 覆盖默认 hover 变色）——未修改时的「保存 / 放弃修改」不再误导为可点。
+- 任务 2 成功消息消退：`useAutoDismissMessage` 共享 hook 落点 **util.ts**（而非三个卡片文件各放一份——S1 已把三卡片拆到三个文件，「组件内小 helper」若各自实现会成 3 份重复；util.ts 是 client 共享工具模块，三卡片共同依赖，引用方向单向无环）。行为：`error=false` 时 4s 清空、busy 中的「保存中…」不清、错误常驻；竞态以「函数式 setState + 消息原文比对」兜底（期间写入新消息则跳过清空），effect 卸载清理 timer。未单独补单测：hook 依赖 React 运行时，未抽到可测纯函数层（timer 竞态已在实现层用原文比对兜底）。
+- 任务 3 快照树骨架：`items === null`（首查未回）渲染 5 条 `dsh-recall-tree-skeleton-row`（`interactive-bg-hover` 底色 + `dsh-recall-pulse` keyframes 明暗呼吸），`aria-hidden` 纯装饰不打扰读屏；数据回来后骨架自动让位列表/空态。
+- 验收：typecheck + build + 单测 296 例全绿。视觉验收（禁用 hover 无反应、4s 消退、骨架闪现）列入发版前冒烟。
+- 备注：实施中 util.ts 一次编辑误删 `UtilApi.api` 成员，已即时恢复并重跑三连（typecheck + 单测 296 例）确认无关回归。
+
 ***
 
 ## V4 表单布局 Grid 化 + 窄屏断点

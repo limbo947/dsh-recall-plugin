@@ -10,6 +10,7 @@
  */
 
 import type { ReactApi, UtilApi, TreeWorkspace, TreeSession } from './util.js'
+import { useAutoDismissMessage } from './util.js'
 import type { ClientSessionsService } from '../types/client-contract.js'
 import type { ManageListItem, ManageResponse, ManageListOk, ManageTitlesOk, ManageMessagesOk, ManageUsageOk, ManageLineageOk, StatusErrorItem, StatusResponse } from '../types/api.js'
 import type { LineageEntry } from '../types/payloads.js'
@@ -75,6 +76,8 @@ export function buildSnapshotManager(React: ReactApi, util: UtilApi, sessionsSvc
     const [usage, setUsage] = React.useState<number | null>(null)
     const [errors, setErrors] = React.useState<StatusErrorItem[] | null>(null)
     const [state, setState] = React.useState({ busy: false, message: '', error: false })
+    // V3：成功消息 4s 后自动消退（错误常驻），共享 hook 见 util.ts
+    useAutoDismissMessage(React, state, setState)
     // 快照全量计数与当前拉取上限：Host 按 limit 切片返回，total 是全量
     const [limit, setLimit] = React.useState(200)
     const [total, setTotal] = React.useState(0)
@@ -393,6 +396,13 @@ export function buildSnapshotManager(React: ReactApi, util: UtilApi, sessionsSvc
         spellCheck: false,
         onChange: (e) => setQuery(e.target.value),
       }),
+      // V3 加载骨架：items===null 表示首查未回——用 5 条 pulse 灰条占位替代
+      // 打开快照管理时的一段空白；aria-hidden 纯装饰不打扰读屏
+      items === null
+        ? React.createElement('div', { className: 'dsh-recall-tree-skeleton', 'aria-hidden': true },
+            ...[1, 2, 3, 4, 5].map((n) => React.createElement('div', { key: 'sk-' + n, className: 'dsh-recall-tree-skeleton-row' }))
+          )
+        : null,
       treeNodes.length > 0 ? React.createElement('div', { className: 'dsh-recall-tree' }, ...treeNodes) : null,
       items && items.length === 0 && !q
         ? React.createElement('div', { className: 'dsh-recall-ex-note', key: 'empty' }, '在任意工作区发送一条消息后，这里会出现快照。')

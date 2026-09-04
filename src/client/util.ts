@@ -81,6 +81,36 @@ export function buildTree(list: ManageListItem[] | null | undefined): TreeWorksp
   return wsList
 }
 
+// 设置卡片三处共用的状态形状（busy 进行中 / message 反馈 / error 是否错误）
+export interface CardStatusState {
+  busy: boolean
+  message: string
+  error: boolean
+}
+
+// V3 成功消息自动消退（ExcludeCard/ManageCard/ConfigForm 共用，落在 util.ts
+// 因为三卡片已在 S1 拆分到不同文件，放任一卡片文件都会造成跨域引用）。
+// 只清成功消息（4s）：错误常驻供从容处理；busy 中的「保存中…」不清。
+// timer 以 setState 函数式更新 + 原文比对兜底：以最后一次 setState 为准，
+// 期间若又写入新消息则跳过清空；卸载时由 effect 清理函数取消。
+export function useAutoDismissMessage(
+  React: ReactApi,
+  state: CardStatusState,
+  setState: (updater: (prev: CardStatusState) => CardStatusState) => void
+): void {
+  React.useEffect(() => {
+    if (!state.message || state.error || state.busy) return
+    const timer = setTimeout(() => {
+      setState((prev) => (
+        prev.message === state.message && !prev.error && !prev.busy
+          ? Object.assign({}, prev, { message: '' })
+          : prev
+      ))
+    }, 4000)
+    return () => clearTimeout(timer)
+  }, [state.message, state.error, state.busy])
+}
+
 // buildUtil 工厂产出（各组件依赖注入消费面；api 的返回类型随调用点泛型推断）
 export interface UtilApi {
   api<T = unknown>(name: string, args?: unknown): Promise<T>

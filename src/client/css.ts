@@ -32,6 +32,8 @@ export const CSS = [
   '.dsh-recall-panel-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:2px}',
   '.dsh-recall-btn{border:none;border-radius:8px;padding:5px 14px;font-size:13px;line-height:20px;cursor:pointer;color:var(--dsw-alias-label-secondary);background:var(--dsw-alias-interactive-bg-hover)}',
   '.dsh-recall-btn:hover{color:var(--dsw-alias-label-primary)}',
+  '.dsh-recall-btn:disabled,.dsh-recall-ex-chip:disabled{opacity:.5;cursor:default}',
+  '.dsh-recall-btn:disabled:hover,.dsh-recall-ex-chip:disabled:hover{color:var(--dsw-alias-label-secondary)}',
   '.dsh-recall-btn-danger{background:var(--dsw-alias-state-error-primary);color:var(--dsw-alias-bg-layer-3)}',
   '.dsh-recall-btn-danger:hover{color:var(--dsw-alias-bg-layer-3);filter:var(--dsh-recall-btn-danger-hover)}',
   // 焦点环（V2-5）：focus-visible 令牌不存在（核验见计划文档），按官方按钮
@@ -87,5 +89,9 @@ export const CSS = [
   '.dsh-recall-cfg-tag-modified{background:var(--dsw-alias-state-warn-tertiary);color:var(--dsw-alias-state-warn-label)}',
   // 环境变量锁定：系统锁住不可写，区别于「已覆盖」（值被更高优先源覆盖）——
   // 两者同属中性，用左边框做结构级区分，不引入第三色。
-  '.dsh-recall-cfg-tag-locked{border-left:2px solid var(--dsw-alias-border-l2)}'
+  '.dsh-recall-cfg-tag-locked{border-left:2px solid var(--dsw-alias-border-l2)}',
+  // V3 快照树加载骨架：items===null 时的 5 条占位行，pulse 明暗呼吸模拟加载。
+  '.dsh-recall-tree-skeleton{display:flex;flex-direction:column;gap:2px;padding:4px 0}',
+  '.dsh-recall-tree-skeleton-row{height:20px;border-radius:6px;background:var(--dsw-alias-interactive-bg-hover);animation:dsh-recall-pulse 1.2s ease-in-out infinite}',
+  '@keyframes dsh-recall-pulse{0%,100%{opacity:1}50%{opacity:.45}}'
 ].join('')

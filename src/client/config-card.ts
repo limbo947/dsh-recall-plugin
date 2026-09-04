@@ -8,6 +8,7 @@
  */
 
 import type { ReactApi, UtilApi } from './util.js'
+import { useAutoDismissMessage } from './util.js'
 import type { ConfigGetResponse, ConfigSetResponse, ConfigResetResponse } from '../types/api.js'
 
 // SectionToggle 的 props 契约（结构类型，装配点由 TS 校验与 settings-cards
@@ -50,6 +51,8 @@ export function buildConfigForm(
     const [overridden, setOverridden] = React.useState<Record<string, unknown>>({})
     const [writable, setWritable] = React.useState(true)
     const [state, setState] = React.useState({ busy: false, message: '', error: false })
+    // V3：成功消息 4s 后自动消退（错误常驻），共享 hook 见 util.ts
+    useAutoDismissMessage(React, state, setState)
     const [showAdvanced, setShowAdvanced] = React.useState(false)
 
     function load(): void {

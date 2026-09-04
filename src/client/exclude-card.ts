@@ -7,6 +7,7 @@
  */
 
 import type { ReactApi, UtilApi } from './util.js'
+import { useAutoDismissMessage } from './util.js'
 import type { ExcludeGetResponse, ExcludeSetResponse } from '../types/api.js'
 
 // 常用排除建议：一键追加的高频项，覆盖构建产物/日志/密钥三类最常见诉求；
@@ -25,6 +26,8 @@ export function buildExcludeCards(React: ReactApi, util: UtilApi): { ExcludeFile
     const [baseline, setBaseline] = React.useState(file.content || '')
     const [quick, setQuick] = React.useState('')
     const [state, setState] = React.useState({ busy: false, message: '', error: false })
+    // V3：成功消息 4s 后自动消退（错误常驻），共享 hook 见 util.ts
+    useAutoDismissMessage(React, state, setState)
     const dirty = draft !== baseline
 
     // 追加一条模式：先补齐行尾换行再拼接，保证每条模式独占一行
