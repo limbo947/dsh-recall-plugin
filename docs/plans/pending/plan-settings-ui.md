@@ -357,6 +357,14 @@ settings-cards.ts（ConfirmRow 组件与四处调用点）；css.ts（过渡 + r
 
 - 树行级动画重排开销可忽略；本项可整项不做，不影响其他项闭环。
 
+### 实施记录（2026-09-04）
+
+- 任务 1 抽 `ConfirmRow`：`{ text, onConfirm, onCancel }`，统一「确认 = 新增 `.dsh-recall-ex-chip-danger`（error-primary 文 + `interactive-bg-hover-danger` 底，官方失败状态行配对）、取消 = 普通 chip」——原 `renderDeleteAllConfirm` 的 btn-danger「确认全部删除」也一并收敛为 chip（确认条内部统一小尺寸层级），四处调用点（快照 / 会话 / 工作区 / 全部）同源同样式。
+- 任务 2 过渡动效：`.tree-children` 与 `.tree-confirm` 挂 `dsh-recall-unfold .16s ease-out`（opacity + 2px 上移入场）；`prefers-reduced-motion: reduce` 媒体查询下 `animation:none` 关闭。
+- **落地差异（计划实现取舍）**：弃用计划字面的 max-height 过渡——树展开高度可变（长列表可达数百 px），固定上限必然裁切，React 卸载路径也无法离场动画；opacity+位移给出同等显隐反馈且零裁切风险。若后续做严格展开平滑，应改离场驻留方案（超本期范围）。
+- 任务 3 维持原位展开不弹窗（plan-settings-ux「明确不做」第 5 条）。
+- 验收：typecheck + build + 单测 296 例全绿。四处确认样统一与系统减少动效下动画关闭列入发版前冒烟。
+
 ***
 
 ## 明确不做（决策记录）

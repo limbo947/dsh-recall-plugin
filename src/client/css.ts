@@ -51,6 +51,9 @@ export const CSS = [
   '.dsh-recall-ex-input{flex:1;min-width:180px;box-sizing:border-box;background:var(--dsw-alias-bg-base);color:var(--dsw-alias-label-primary);border:1px solid var(--dsw-alias-border-l1);border-radius:8px;padding:5px 10px;font-size:13px;line-height:1.5}',
   '.dsh-recall-ex-chip{border:none;border-radius:6px;padding:2px 8px;font-size:12px;line-height:1.5;cursor:pointer;color:var(--dsw-alias-label-secondary);background:var(--dsw-alias-interactive-bg-hover)}',
   '.dsh-recall-ex-chip:hover{color:var(--dsw-alias-label-primary)}',
+  // V9 确认按钮 danger chip：红色文字 + 官方失败状态行底，与 .btn-danger 同义
+  // 但保持 chip 尺寸层级（确认条内部不出现大按钮）
+  '.dsh-recall-ex-chip-danger{color:var(--dsw-alias-state-error-primary);background:var(--dsw-alias-interactive-bg-hover-danger)}',
   '.dsh-recall-ex-status{margin-right:auto;font-size:12px;line-height:1.5;color:var(--dsw-alias-label-tertiary)}',
   '.dsh-recall-ex-status-error{color:var(--dsw-alias-state-error-primary)}',
   '.dsh-recall-ex-status-success{color:var(--dsw-alias-state-success-primary)}',
@@ -78,8 +81,13 @@ export const CSS = [
   // V4 树缩进契约化：总缩进 = --dsh-recall-tree-indent（折叠钮 18px + gap 6px），
   // children 按 2/3（16px margin）与 1/3（8px padding）拆分，恰好让子行文字
   // 与父行折叠钮右缘对齐——把「16+8 恰等于 18+6」的巧合变成单一事实源。
-  '.dsh-recall-tree-children{display:flex;flex-direction:column;gap:1px;margin-left:calc(var(--dsh-recall-tree-indent)*2/3);border-left:1px solid var(--dsw-alias-border-l1);padding-left:calc(var(--dsh-recall-tree-indent)/3)}',
-  '.dsh-recall-tree-confirm{display:flex;gap:8px;align-items:center;font-size:12px;line-height:1.5;color:var(--dsw-alias-label-secondary)}',
+  '.dsh-recall-tree-children{display:flex;flex-direction:column;gap:1px;margin-left:calc(var(--dsh-recall-tree-indent)*2/3);border-left:1px solid var(--dsw-alias-border-l1);padding-left:calc(var(--dsh-recall-tree-indent)/3);animation:dsh-recall-unfold .16s ease-out}',
+  '.dsh-recall-tree-confirm{display:flex;gap:8px;align-items:center;font-size:12px;line-height:1.5;color:var(--dsw-alias-label-secondary);animation:dsh-recall-unfold .16s ease-out}',
+  // V9 展开动效：opacity + 2px 上移入场（确认条/树展开共用一个 keyframes）。
+  // 弃用 max-height 过渡：树展开高度可变（长列表数百 px），固定上限会裁切；
+  // opacity+位移给出同等显隐反馈且零裁切风险。
+  '@keyframes dsh-recall-unfold{from{opacity:0;transform:translateY(-2px)}to{opacity:1;transform:none}}',
+  '@media (prefers-reduced-motion:reduce){.dsh-recall-tree-children,.dsh-recall-tree-confirm{animation:none}}',
   '.dsh-recall-card{border:1px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-layer-3);border-radius:12px;list-style:none;transition:border-color .16s,background .16s;display:flex;flex-direction:column;text-align:left}',
   '.dsh-recall-card.dsh-recall-card-open{background:var(--dsw-alias-bg-layer-2);border-color:var(--dsw-alias-label-dimmed)}',
   '.dsh-recall-card-head{flex-direction:column;flex:1;gap:4px;min-width:0;display:flex}',

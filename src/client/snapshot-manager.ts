@@ -198,20 +198,26 @@ export function buildSnapshotManager(React: ReactApi, util: UtilApi, sessionsSvc
     const [expanded, setExpanded] = React.useState(() => new Set())
     const [confirming, setConfirming] = React.useState<{ kind: string; key?: string; extra?: Record<string, unknown>; text?: string } | null>(null)
 
+    // V9：四种删除确认统一为 ConfirmRow——「确认」=danger chip（危险操作
+    // 语义一致），「取消」=普通 chip；原位展开不弹窗（既定交互维持）
+    function ConfirmRow(props: { text: string; onConfirm: () => void; onCancel: () => void }): import('react').ReactNode {
+      return React.createElement('div', { className: 'dsh-recall-tree-confirm' },
+        props.text,
+        React.createElement('button', { type: 'button', className: 'dsh-recall-ex-chip dsh-recall-ex-chip-danger', onClick: props.onConfirm }, '确认'),
+        React.createElement('button', { type: 'button', className: 'dsh-recall-ex-chip', onClick: props.onCancel }, '取消')
+      )
+    }
+
     function renderDeleteAllConfirm(): import('react').ReactNode {
       if (!confirming || confirming.kind !== 'all') return null
-      return React.createElement('div', { className: 'dsh-recall-tree-confirm' },
-          '确认删除所有工作区的全部快照？此操作不可恢复。',
-          React.createElement('button', {
-            type: 'button',
-            className: 'dsh-recall-btn dsh-recall-btn-danger',
-            onClick: () => {
-              setConfirming(null)
-              run('deleteAll', {}, '已清空全部快照')
-            }
-          }, '确认全部删除'),
-          React.createElement('button', { type: 'button', className: 'dsh-recall-ex-chip', onClick: () => setConfirming(null) }, '取消')
-        )
+      return React.createElement(ConfirmRow, {
+        text: '确认删除所有工作区的全部快照？此操作不可恢复。',
+        onConfirm: () => {
+          setConfirming(null)
+          run('deleteAll', {}, '已清空全部快照')
+        },
+        onCancel: () => setConfirming(null)
+      })
     }
 
     function toggle(key: string): void {
@@ -251,19 +257,15 @@ export function buildSnapshotManager(React: ReactApi, util: UtilApi, sessionsSvc
     }
     function renderConfirm(kind: string, key: string, extra: Record<string, unknown>, text: string): import('react').ReactNode {
       if (!confirming || confirming.kind !== kind || confirming.key !== key) return null
-      return React.createElement('div', { className: 'dsh-recall-tree-confirm' },
+      return React.createElement(ConfirmRow, {
         text,
-        React.createElement('button', {
-          type: 'button',
-          className: 'dsh-recall-ex-chip',
-          onClick: () => {
-            const c = confirming
-            setConfirming(null)
-            run('delete', c.extra, '已删除')
-          }
-        }, '确认'),
-        React.createElement('button', { type: 'button', className: 'dsh-recall-ex-chip', onClick: () => setConfirming(null) }, '取消')
-      )
+        onConfirm: () => {
+          const c = confirming
+          setConfirming(null)
+          run('delete', c.extra, '已删除')
+        },
+        onCancel: () => setConfirming(null)
+      })
     }
     // 叶子节点：展开箭头占位 + 时间 + 消息内容摘要 + 截断 ID。
     function renderLeaf(it: ManageListItem): import('react').ReactNode {
