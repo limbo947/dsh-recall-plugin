@@ -88,6 +88,9 @@ export const CSS = [
   '.dsh-recall-card-body{border-top:1px solid var(--dsw-alias-border-l2);margin:0 16px;padding:12px 0 8px;display:flex;flex-direction:column;gap:12px}',
   '.dsh-recall-cardbtn{appearance:none;width:100%;font:inherit;color:inherit;text-align:left;cursor:pointer;background:0 0;border:0;border-radius:12px;align-items:center;gap:12px;padding:14px 16px;display:flex}',
   '.dsh-recall-cfg-row{display:grid;grid-template-columns:max-content minmax(0,1fr);column-gap:8px;row-gap:4px;align-items:start}',
+  // V5 表单分组小标题：语义分组分隔符，字号与 hint 同级、加粗 + label-secondary
+  // 作层级区分，不引入第三层字阶。
+  '.dsh-recall-cfg-group{color:var(--dsw-alias-label-secondary);font-size:13px;line-height:20px;font-weight:600}',
   // V4 后 cfg-line 只装控件（label 已是 cfg-row 直接子元素，占 grid 第一列 max-content）
   '.dsh-recall-cfg-line{display:flex;align-items:center;gap:8px;min-width:0;grid-column:2}',
   '.dsh-recall-cfg-label{color:var(--dsw-alias-label-secondary);font-size:13px;line-height:20px}',

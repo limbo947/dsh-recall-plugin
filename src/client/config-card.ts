@@ -189,6 +189,9 @@ export function buildConfigForm(
     }
 
     return React.createElement('div', { className: 'dsh-recall-ex-card' },
+      // V5 表单分组：9 字段平铺 → 「快照行为 / 自动治理」两组语义分组小标题，
+      // 降低认知负担；「高级：基础排除表」沿用 SectionToggle 折叠，不重复加标题。
+      React.createElement('div', { className: 'dsh-recall-cfg-group' }, '快照行为'),
       React.createElement('div', { className: 'dsh-recall-cfg-row', key: 'snapshotEnabled' },
         // V4：label 上提（与 numRow 同法）
         React.createElement('label', { className: 'dsh-recall-cfg-label', htmlFor: 'dsh-recall-cfg-snapshot' }, '启用快照'),
@@ -205,11 +208,6 @@ export function buildConfigForm(
         ),
         React.createElement('div', { className: 'dsh-recall-cfg-hint' }, '关闭后不再新建快照（已有快照仍可撤回），适合临时禁用快照的场合')
       ),
-      numRow('gcSnaps', 'gc 触发条数', '每积累多少条快照触发一次 git gc', { min: 1, step: 1 }),
-      numRow('gcHours', 'gc 触发小时', '距上次 gc 超过多少小时触发（与条数先到先触发）', { min: 1, step: 1 }),
-      numRow('maxFileBytes', '文件大小上限', '超过该大小的文件不进快照、不被回退触碰（单位 MB，支持小数）', { suffix: 'MB', min: 0.01, step: 0.5 }),
-      numRow('maxSnapshotsPerWorkspace', '快照总量上限', '每个工作区保留的最大快照数，超限自动删除最旧的；填 0 表示不限制', { min: 0, step: 1 }),
-      numRow('retentionDays', '快照保留天数', '按天数保留快照，超期自动删除最旧的；填 0 表示不启用（与快照总数上限各自生效）', { min: 0, step: 1 }),
       React.createElement('div', { className: 'dsh-recall-cfg-row', key: 'refillDraft' },
         // V4：label 上提（与 numRow 同法）
         React.createElement('label', { className: 'dsh-recall-cfg-label', htmlFor: 'dsh-recall-cfg-refill' }, '撤回后回填输入框'),
@@ -242,6 +240,12 @@ export function buildConfigForm(
         ),
         React.createElement('div', { className: 'dsh-recall-cfg-hint' }, '撤回后原会话从列表归档隐藏（可从归档找回）；关闭则保留在列表中，方便对照回退前后的上下文')
       ),
+      React.createElement('div', { className: 'dsh-recall-cfg-group' }, '自动治理'),
+      numRow('gcSnaps', 'gc 触发条数', '每积累多少条快照触发一次 git gc', { min: 1, step: 1 }),
+      numRow('gcHours', 'gc 触发小时', '距上次 gc 超过多少小时触发（与条数先到先触发）', { min: 1, step: 1 }),
+      numRow('maxFileBytes', '文件大小上限', '超过该大小的文件不进快照、不被回退触碰（单位 MB，支持小数）', { suffix: 'MB', min: 0.01, step: 0.5 }),
+      numRow('maxSnapshotsPerWorkspace', '快照总量上限', '每个工作区保留的最大快照数，超限自动删除最旧的；填 0 表示不限制', { min: 0, step: 1 }),
+      numRow('retentionDays', '快照保留天数', '按天数保留快照，超期自动删除最旧的；填 0 表示不启用（与快照总数上限各自生效）', { min: 0, step: 1 }),
       React.createElement(SectionToggle, { title: '高级：基础排除表', open: showAdvanced, onToggle: () => setShowAdvanced((v) => !v) }),
       showAdvanced ? React.createElement('div', { className: 'dsh-recall-cfg-row', key: 'baseExcludes' },
         // V4：label 上提（与 numRow 同法）；cfg-line 只剩 tags，textarea/hint 各自归第二列

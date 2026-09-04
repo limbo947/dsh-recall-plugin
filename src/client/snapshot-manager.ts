@@ -438,18 +438,21 @@ export function buildSnapshotManager(React: ReactApi, util: UtilApi, sessionsSvc
         React.createElement('button', { type: 'button', className: 'dsh-recall-btn', disabled: state.busy, onClick: refresh }, '刷新'),
         React.createElement('button', {
           type: 'button',
-          className: 'dsh-recall-btn dsh-recall-btn-danger',
-          disabled: state.busy,
-          title: '删除全部工作区的所有快照；会直接核对并删除 git tag（即使列表为空也可清理残留）',
-          onClick: () => setConfirming({ kind: 'all' })
-        }, '全部删除'),
-        React.createElement('button', {
-          type: 'button',
           className: 'dsh-recall-btn',
           disabled: state.busy,
           title: '立即对全部工作区执行一次 git gc（压缩对象库释放空间）',
           onClick: () => run('gc', {}, 'gc 完成')
-        }, '立即 gc')
+        }, '立即 gc'),
+        // V5：全部删除固定为操作区最后一个按钮（排在立即 gc 之后）——即使
+        // 「加载更多」出现/消失也不漂移；danger 与普通按钮间由 panel-actions
+        // 统一 gap:8px 形成视觉分组
+        React.createElement('button', {
+          type: 'button',
+          className: 'dsh-recall-btn dsh-recall-btn-danger',
+          disabled: state.busy,
+          title: '删除全部工作区的所有快照；会直接核对并删除 git tag（即使列表为空也可清理残留）',
+          onClick: () => setConfirming({ kind: 'all' })
+        }, '全部删除')
       )
     )
   }

@@ -227,6 +227,12 @@ settings-cards.ts（ConfigForm 渲染顺序与分组标题、ManageCard `panel-a
 
 - 纯结构重排，零逻辑变化；回退 = git revert。
 
+### 实施记录（2026-09-04）
+
+- 任务 1 表单分组：ConfigForm 加两组小标题（新增 `.dsh-recall-cfg-group`：13px、`font-weight:600`、label-secondary——与 hint 同级字号、不引入第三层字阶）——「快照行为」=（启用快照 / 撤回后回填输入框 / 撤回后归档原会话），「自动治理」=（gc 条数 / gc 小时 / 文件大小上限 / 快照总量上限 / 保留天数），「高级」沿用 SectionToggle 折叠（未加标题，计划原文如此）。字段渲染顺序重排（DOM 顺序变、state/patch 逻辑不变，save 按 key 收集 patch 与顺序无关）。
+- 任务 2 危险操作固定位：「全部删除」移到操作区最后一个按钮（刷新 / 立即 gc / 全部删除）——「加载更多」出现/消失不再引起整体漂移；与普通按钮间距由 panel-actions 既有统一 `gap:8px` 满足（计划「留 8px 间隔」原样保留，无额外加宽）。
+- 验收：typecheck + build + 单测 296 例全绿。配置改-存-回读回归列入发版前冒烟。
+
 ***
 
 ## V6 健康徽章化 + 错误区升级
