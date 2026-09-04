@@ -6,6 +6,10 @@
  * 降级为直接 <style> 注入（静态 bundle 的 ctx 可能不提供 styles 服务）。
  */
 export const CSS = [
+  // 语义变量集中声明（V1-5）：btn-danger 的 hover 亮度是令牌体系外补丁，
+  // 集中成单一来源避免散落硬编码；前景色用官方实证配对 bg-layer-3（error
+  // primary 底色上文本随主题翻转，见 plan-settings-ui V1 核验记录）。
+  ':root{--dsh-recall-btn-danger-hover:brightness(1.08)}',
   '.dsh-recall-row{flex-direction:column;align-items:flex-end;gap:6px;display:flex}',
   '.dsh-recall-stack{flex-direction:column;align-items:flex-end;gap:8px;min-width:0;max-width:min(525px,82%);display:flex}',
   '.dsh-recall-bubble{background:var(--dsw-specific-bubble);max-width:100%;color:var(--dsw-alias-label-primary);border-radius:22px;padding:10px 16px;font-size:16px;line-height:24px;white-space:pre-wrap;word-break:break-word}',
@@ -71,5 +75,11 @@ export const CSS = [
   '.dsh-recall-cfg-input:disabled{opacity:.5}',
   '.dsh-recall-cfg-area{font-family:inherit;font-size:12px;line-height:18px;color:var(--dsw-alias-label-primary);background:var(--dsw-alias-bg-base);border:1px solid var(--dsw-alias-border-l2);border-radius:8px;padding:6px 8px;min-height:64px}',
   '.dsh-recall-cfg-hint{color:var(--dsw-alias-label-tertiary);font-size:12px;line-height:18px;padding-left:138px}',
-  '.dsh-recall-cfg-tag{flex:none;font-size:11px;line-height:16px;padding:1px 6px;border-radius:6px;background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-tertiary)}'
+  '.dsh-recall-cfg-tag{flex:none;font-size:11px;line-height:16px;padding:1px 6px;border-radius:6px;background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-tertiary)}',
+  // 已修改（用户改了配置）用 warn 底色提示「有未保存变更」——修改不是错误，
+  // warn 家族来自 V1 核验的官方配对（tertiary 底 + label 文）。
+  '.dsh-recall-cfg-tag-modified{background:var(--dsw-alias-state-warn-tertiary);color:var(--dsw-alias-state-warn-label)}',
+  // 环境变量锁定：系统锁住不可写，区别于「已覆盖」（值被更高优先源覆盖）——
+  // 两者同属中性，用左边框做结构级区分，不引入第三色。
+  '.dsh-recall-cfg-tag-locked{border-left:2px solid var(--dsw-alias-border-l2)}'
 ].join('')

@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+### 修复
+
+- **设置页语义色修复（V1）**：ExcludeCard「保存」按钮去掉危险红样式、与配置表单保存按钮统一；快照文件清单「已修改」badge 从错误红改为 warning（amber）色系——修改不是错误；配置表单三类状态标签分化（「已修改」warn 底色 /「已覆盖」中性灰 /「环境变量锁定」中性灰 + 左边框）；`btn-danger` 前景色硬编码 `#fff` 换为官方实证的主题感知令牌 `--dsw-alias-bg-layer-3`，hover 亮度集中为 css.ts 顶部语义变量，消灭令牌体系外散落补丁。纯样式改动，无行为变化。
+
 ### 变更
 
 - **源码整体迁移 TypeScript（同形态复刻）**：host/client 源码迁入 `src/`（`src/host/` 13 文件 + `src/client/` 6 文件 + `src/types/` 类型库，跨域契约以编译期类型锁死），`lib/` 转为纯构建产物目录——`npm run build` 经 esbuild 逐文件转译 host 产物 + 打包 `lib/client.js`；功能与对外契约零变化（npm 包布局、`main`/`exports`/`files`、`cordis.patch.yml`、端点/探针/装配门禁均不变），行为一致性由类型检查 + 既有回归网双保险。新增 `npm run typecheck`（CI 类型门禁）与统一产物新鲜度校验。

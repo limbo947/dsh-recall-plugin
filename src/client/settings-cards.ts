@@ -682,9 +682,9 @@ export function buildSettingsCards(React: ReactApi, util: UtilApi, sessionsSvc: 
             onChange: (e: import('react').ChangeEvent<HTMLInputElement>) => edit(key, e.target.value),
           }),
           opts && opts.suffix ? React.createElement('span', { className: 'dsh-recall-cfg-tag' }, opts.suffix) : null,
-          changed && !locked ? React.createElement('span', { className: 'dsh-recall-cfg-tag' }, '已修改') : null,
+          changed && !locked ? React.createElement('span', { className: 'dsh-recall-cfg-tag dsh-recall-cfg-tag-modified' }, '已修改') : null,
           overridden && overridden[key] !== undefined ? React.createElement('span', { className: 'dsh-recall-cfg-tag' }, '已覆盖') : null,
-          locked ? React.createElement('span', { className: 'dsh-recall-cfg-tag' }, '环境变量锁定') : null
+          locked ? React.createElement('span', { className: 'dsh-recall-cfg-tag dsh-recall-cfg-tag-locked' }, '环境变量锁定') : null
         ),
         React.createElement('div', { className: 'dsh-recall-cfg-hint' }, hint)
       )
@@ -720,7 +720,7 @@ export function buildSettingsCards(React: ReactApi, util: UtilApi, sessionsSvc: 
             disabled: !writable,
             onChange: (e: import('react').ChangeEvent<HTMLInputElement>) => edit('snapshotEnabled', e.target.checked),
           }),
-          draft.snapshotEnabled !== baseline.snapshotEnabled ? React.createElement('span', { className: 'dsh-recall-cfg-tag' }, '已修改') : null,
+          draft.snapshotEnabled !== baseline.snapshotEnabled ? React.createElement('span', { className: 'dsh-recall-cfg-tag dsh-recall-cfg-tag-modified' }, '已修改') : null,
           overridden && overridden.snapshotEnabled !== undefined ? React.createElement('span', { className: 'dsh-recall-cfg-tag' }, '已覆盖') : null
         ),
         React.createElement('div', { className: 'dsh-recall-cfg-hint' }, '关闭后不再新建快照（已有快照仍可撤回），适合临时禁用快照的场合')
@@ -740,7 +740,7 @@ export function buildSettingsCards(React: ReactApi, util: UtilApi, sessionsSvc: 
             disabled: !writable,
             onChange: (e: import('react').ChangeEvent<HTMLInputElement>) => edit('refillDraft', e.target.checked),
           }),
-          draft.refillDraft !== baseline.refillDraft ? React.createElement('span', { className: 'dsh-recall-cfg-tag' }, '已修改') : null,
+          draft.refillDraft !== baseline.refillDraft ? React.createElement('span', { className: 'dsh-recall-cfg-tag dsh-recall-cfg-tag-modified' }, '已修改') : null,
           overridden && overridden.refillDraft !== undefined ? React.createElement('span', { className: 'dsh-recall-cfg-tag' }, '已覆盖') : null
         ),
         React.createElement('div', { className: 'dsh-recall-cfg-hint' }, '撤回成功后把被撤回的消息文本回填到输入框，方便修改后重新发送')
@@ -755,7 +755,7 @@ export function buildSettingsCards(React: ReactApi, util: UtilApi, sessionsSvc: 
             disabled: !writable,
             onChange: (e: import('react').ChangeEvent<HTMLInputElement>) => edit('archiveOriginal', e.target.checked),
           }),
-          draft.archiveOriginal !== baseline.archiveOriginal ? React.createElement('span', { className: 'dsh-recall-cfg-tag' }, '已修改') : null,
+          draft.archiveOriginal !== baseline.archiveOriginal ? React.createElement('span', { className: 'dsh-recall-cfg-tag dsh-recall-cfg-tag-modified' }, '已修改') : null,
           overridden && overridden.archiveOriginal !== undefined ? React.createElement('span', { className: 'dsh-recall-cfg-tag' }, '已覆盖') : null
         ),
         React.createElement('div', { className: 'dsh-recall-cfg-hint' }, '撤回后原会话从列表归档隐藏（可从归档找回）；关闭则保留在列表中，方便对照回退前后的上下文')
@@ -764,7 +764,7 @@ export function buildSettingsCards(React: ReactApi, util: UtilApi, sessionsSvc: 
       showAdvanced ? React.createElement('div', { className: 'dsh-recall-cfg-row', key: 'baseExcludes' },
         React.createElement('div', { className: 'dsh-recall-cfg-line' },
           React.createElement('label', { className: 'dsh-recall-cfg-label' }, '基础排除表'),
-          draft.baseExcludes !== baseline.baseExcludes ? React.createElement('span', { className: 'dsh-recall-cfg-tag' }, '已修改') : null,
+          draft.baseExcludes !== baseline.baseExcludes ? React.createElement('span', { className: 'dsh-recall-cfg-tag dsh-recall-cfg-tag-modified' }, '已修改') : null,
           overridden && overridden.baseExcludes !== undefined ? React.createElement('span', { className: 'dsh-recall-cfg-tag' }, '已覆盖') : null
         ),
         React.createElement('textarea', {

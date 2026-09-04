@@ -7,19 +7,19 @@
 
 ## 任务总览
 
-| 项 | 主题 | 优先级 | 前置依赖 |
-|---|---|---|---|
-| V1 | 语义色修复（保存按钮 / 标签三色 / badge 色 / 硬编码收敛） | 高 | 无（warning 变量须核验） |
-| V2 | 可访问性补强（树键盘操作 / 焦点可见 / live region / 标签关联） | 高 | 无 |
-| V3 | 交互反馈（按钮禁用态 / 成功消息自动消退 / 加载骨架） | 高 | 无 |
-| V4 | 表单布局 Grid 化（消灭 130/138 魔法数 + 窄屏断点） | 中 | 建议 S1 拆分后 |
-| V5 | 表单分组 + 危险操作固定位 | 中 | 建议 S1 拆分后 |
-| V6 | 健康徽章化 + 错误区升级 | 中 | 无 |
-| V7 | 排版收敛（字阶 / 内联样式清理 / 行高单位统一） | 低 | 无 |
-| V8 | 响应式补全（quick 行 wrap，与 V4 共用断点） | 低 | V4 |
-| V9 | 确认条统一 + 过渡动效（可选） | 低 | 无 |
+| 项  | 主题                                        | 优先级 | 前置依赖             |
+| -- | ----------------------------------------- | --- | ---------------- |
+| V1 | 语义色修复（保存按钮 / 标签三色 / badge 色 / 硬编码收敛）      | 高   | 无（warning 变量须核验） |
+| V2 | 可访问性补强（树键盘操作 / 焦点可见 / live region / 标签关联） | 高   | 无                |
+| V3 | 交互反馈（按钮禁用态 / 成功消息自动消退 / 加载骨架）             | 高   | 无                |
+| V4 | 表单布局 Grid 化（消灭 130/138 魔法数 + 窄屏断点）        | 中   | 建议 S1 拆分后        |
+| V5 | 表单分组 + 危险操作固定位                            | 中   | 建议 S1 拆分后        |
+| V6 | 健康徽章化 + 错误区升级                             | 中   | 无                |
+| V7 | 排版收敛（字阶 / 内联样式清理 / 行高单位统一）                | 低   | 无                |
+| V8 | 响应式补全（quick 行 wrap，与 V4 共用断点）             | 低   | V4               |
+| V9 | 确认条统一 + 过渡动效（可选）                          | 低   | 无                |
 
----
+***
 
 ## V1 语义色修复
 
@@ -49,14 +49,28 @@
 ### 验收
 
 - 两处保存按钮样式一致且非红；三类标签视觉可区分；文件清单「已修改」不再是错误红。
+
 - 浅色 / 深色主题各过一遍设置页与撤回确认面板对照。
+
 - `npm run build && npm test` 全绿。
 
 ### 风险与回退
 
 - warning 变量不存在 → 走降级方案，本项仍闭环；改动纯样式，回退 = git revert。
 
----
+### 实施记录（2026-09-04）
+
+- 全部按核验结论落地，无降级分支被触发。
+
+- 落地差异 1（比计划更进一步）：`btn-danger` 前景色找到配套令牌——官方实证的 error-primary 底上文字配对是 `--dsw-alias-bg-layer-3`（settings-models badge 规则，随主题翻转：浅色 #fff／深色 #353638），直接用令牌替代 `#fff`，未走「语义变量声明」fallback 的前景部分；hover 亮度确认无对应令牌（`--dsw-alias-button-*` 家族只有 primary/info/elevated/floating/ghost，无 danger），按计划集中为 `:root{--dsh-recall-btn-danger-hover:brightness(1.08)}`。
+
+- 落地差异 2：`cfg-tag` 三色按核验结论实施——「已修改」用 warn-tertiary 底 + warn-label 文；「已覆盖」维持中性；「环境变量锁定」中性 + `border-left:2px solid var(--dsw-alias-border-l2)`（左边框色用中性而非 warn，避免与「我改的」语义撞色）。
+
+- 保存按钮去 danger（ExcludeCard L169）与 `badge-modified` 改 warn 色系已一并落地；badge 影响面含撤回确认面板文件清单（同 class）。
+
+- 验收：typecheck + build + 单测（296 例）全绿；双主题视觉对照与撤回确认面板核对列入发版前冒烟。`btn-danger` 的 `filter` 集中在 css.ts 顶部单点声明。
+
+***
 
 ## V2 可访问性补强
 
@@ -71,7 +85,10 @@
 3. **状态消息播报**：三处状态 span（ExcludeCard / ManageCard / ConfigForm 的 `panel-actions` 内）加 `role="status"` 与 `aria-live="polite"`；错误文案渲染时加「错误：」文字前缀——不只依赖红色传达。
 4. **无标签控件补 aria-label**：快照搜索框（L482-488）、exclude textarea（L143）、快速添加输入框（L150）。
 5. **焦点可见**：css.ts 全局加 `:focus-visible` 描边（颜色优先用现成 focus/边线令牌，**须核验**是否存在 `--dsw-alias-state-focus` 类变量，无则用 border-l2 加深一档的现成令牌）。
-6. SectionToggle 与卡片头的 `aria-expanded` 现状良好，回归即可。
+
+> 💡 核验结论（2026-09-04，同源）：`--dsw-alias-state-focus` 类变量**不存在**（主题包全量扫描 0 命中 focus/ring/outline 变量）。走降级：border-l2 加深一档 = `--dsw-alias-border-l3`——恰与官方按钮 `:focus-visible` 惯例一致（官方 settings-models/lib/client.js 实证：`box-shadow:0 0 0 2px var(--dsw-alias-border-l3)`）。本计划全局 focus 环统一用此形式（按钮/输入框均适用）。
+
+1. SectionToggle 与卡片头的 `aria-expanded` 现状良好，回归即可。
 
 ### 改动落点
 
@@ -80,14 +97,16 @@ settings-cards.ts（树渲染两处、numRow、状态 span 三处、输入控件
 ### 验收
 
 - 键盘走查清单（实弹）：Tab 可到达树折叠钮 / 全部按钮 / 全部输入框；Enter/Space 可折叠展开树；焦点环全程可见。
+
 - 读屏（Narrator 或 NVDA）走查：label 关联播报正确、保存结果自动播报。
+
 - `npm run build && npm test` 全绿。
 
 ### 风险与回退
 
 - span → button 引入 UA 默认样式差异——CSS 重置兜底；纯增量无行为变化，回退 = git revert。
 
----
+***
 
 ## V3 交互反馈：禁用态 / 消息消退 / 加载骨架
 
@@ -108,13 +127,14 @@ css.ts（disabled / 骨架样式）；settings-cards.ts（三处卡片状态逻�
 ### 验收
 
 - 未修改时保存按钮明显置灰且 hover 无反应；保存成功 4s 后提示消失、失败提示常驻；打开快照管理先见骨架再见树。
+
 - `npm run build && npm test` 全绿。
 
 ### 风险与回退
 
 - 消退定时器与手动操作的竞态：以「最后一次 setState 为准」，timer 只清 success 类消息；逻辑简单，若抽到可测层则补单测。
 
----
+***
 
 ## V4 表单布局 Grid 化 + 窄屏断点
 
@@ -136,13 +156,14 @@ css.ts（cfg-row / cfg-label / cfg-hint / tree-children）；settings-cards.ts �
 ### 验收
 
 - 任意改长 label 文案不再错位；≤480px 窄面板表单纵向堆叠可用、无横向溢出；树层级参考线对齐。
+
 - 视觉回归：设置页全字段走查对照截图。
 
 ### 风险与回退
 
 - grid 兼容性：DSH 内核为现代 Chromium，官方设置页自身使用现代布局，风险低（动手前可对照官方设置卡片构建产物确认）。纯样式重构，回退 = git revert。
 
----
+***
 
 ## V5 表单分组 + 危险操作固定位
 
@@ -153,8 +174,11 @@ css.ts（cfg-row / cfg-label / cfg-hint / tree-children）；settings-cards.ts �
 ### 任务分解
 
 1. ConfigForm 字段分三组，组间加小标题（复用 ex-note 加粗或新增小标题 class）：
+
    - **快照行为**：启用快照 / 撤回后回填输入框 / 撤回后归档原会话；
+
    - **自动治理**：gc 触发条数 / gc 触发小时 / 文件大小上限 / 快照总量上限 / 快照保留天数；
+
    - **高级**：基础排除表（维持现有 SectionToggle 折叠，不动）。
 2. ManageCard 操作区：「全部删除」固定为操作区最后一个按钮——现状夹在「刷新」与「立即 gc」之间，且「加载更多」出现时整体位置漂移；danger 按钮与普通按钮之间留 8px 间隔形成视觉分组。
 
@@ -165,13 +189,14 @@ settings-cards.ts（ConfigForm 渲染顺序与分组标题、ManageCard `panel-a
 ### 验收
 
 - 字段分组与上述一致；无论「加载更多」是否出现，「全部删除」位置固定在末尾。
+
 - 配置改-存-回读全流程回归无异常。
 
 ### 风险与回退
 
 - 纯结构重排，零逻辑变化；回退 = git revert。
 
----
+***
 
 ## V6 健康徽章化 + 错误区升级
 
@@ -191,13 +216,14 @@ settings-cards.ts（ManageCard 健康行与错误区渲染）；css.ts（pill / 
 ### 验收
 
 - git 不可用时横幅醒目且位于卡片顶部；错误区标题红色带计数、位置在操作区之上；git 正常 / 无错误时布局不残留占位。
+
 - 断 git（PATH 移除）实弹验证一次。
 
 ### 风险与回退
 
 - 无（展示层重排，数据源不变）。
 
----
+***
 
 ## V7 排版收敛
 
@@ -219,13 +245,14 @@ css.ts（字号 / 行高 / 变量声明）；settings-cards.ts（L805 内联样�
 ### 验收
 
 - css.ts 全文搜索无 11px、无 px 行高；settings-cards.ts 无内联 fontSize/fontWeight。
+
 - 视觉回归对照（字级微调可能引起折行变化，树行有 ellipsis 兜底）。
 
 ### 风险与回退
 
 - 低；纯样式，回退 = git revert。
 
----
+***
 
 ## V8 响应式补全
 
@@ -251,7 +278,7 @@ css.ts（quick 行与 panel-actions 的媒体查询分支）。
 
 - 无。
 
----
+***
 
 ## V9 确认条统一 + 过渡动效（可选，最后做）
 
@@ -277,7 +304,7 @@ settings-cards.ts（ConfirmRow 组件与四处调用点）；css.ts（过渡 + r
 
 - 树行级动画重排开销可忽略；本项可整项不做，不影响其他项闭环。
 
----
+***
 
 ## 明确不做（决策记录）
 
@@ -297,7 +324,9 @@ settings-cards.ts（ConfirmRow 组件与四处调用点）；css.ts（过渡 + r
 ```
 
 - 与 plan-competitor-ux S1 的关系：第一批均为局部小改（每项 ≤30 行量级），与拆分冲突面小；若 S1 已排期临近，也可 S1 先行、本计划全量后置——由当期实施者按排期定。
+
 - 每项独立成 PR；client 改动后 `npm run build` 再 `npm test`（CI 产物新鲜度门禁拦截漏跑）。
+
 - 发版类型：patch（纯样式与 a11y 修复，无行为 / 契约变化）；版本号发版时定，计划内不预先指定。
 
 ## 冒烟路径（发版前）
@@ -307,3 +336,4 @@ settings-cards.ts（ConfirmRow 组件与四处调用点）；css.ts（过渡 + r
 3. 窄屏：360–480px 宽面板走查表单与排除编辑器（V4 / V8）。
 4. 功能回归：配置改-存-回读、排除编辑保存、快照树搜索 / 三级删除 / 全部删除 / gc、健康行与错误区显示（V3 / V5 / V6）。
 5. 系统减少动效设置下过渡自动关闭（V9）。
+
