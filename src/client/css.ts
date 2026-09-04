@@ -29,7 +29,9 @@ export const CSS = [
   '.dsh-recall-badge-restored{color:var(--dsw-alias-label-secondary);background:var(--dsw-alias-interactive-bg-hover)}',
   '.dsh-recall-badge-added{color:var(--dsw-alias-label-tertiary);background:var(--dsw-alias-interactive-bg-hover)}',
   '.dsh-recall-rel{min-width:0;color:var(--dsw-alias-label-primary);word-break:break-all;font-family:var(--dsw-font-code, ui-monospace, SFMono-Regular, Consolas, monospace)}',
-  '.dsh-recall-panel-actions{display:flex;flex-wrap:wrap;gap:8px;justify-content:flex-end;margin-top:2px}',
+  // grid-column 对非 grid 祖先（exclude/快照卡片的 flex 布局）自动无效，无害；
+  // 在 cfg-grid 内则保证操作区/占满行不被 auto-placement 塞进第一列撑爆列宽。
+  '.dsh-recall-panel-actions{display:flex;flex-wrap:wrap;gap:8px;justify-content:flex-end;margin-top:2px;grid-column:1/-1}',
   '.dsh-recall-btn{border:none;border-radius:8px;padding:5px 14px;font-size:13px;line-height:1.5;cursor:pointer;color:var(--dsw-alias-label-secondary);background:var(--dsw-alias-interactive-bg-hover)}',
   '.dsh-recall-btn:hover{color:var(--dsw-alias-label-primary)}',
   '.dsh-recall-btn:disabled,.dsh-recall-ex-chip:disabled{opacity:.5;cursor:default}',
@@ -95,21 +97,32 @@ export const CSS = [
   '.dsh-recall-card-desc{color:var(--dsw-alias-label-tertiary);font-size:13px;line-height:1.5}',
   '.dsh-recall-card-body{border-top:1px solid var(--dsw-alias-border-l2);margin:0 16px;padding:12px 0 8px;display:flex;flex-direction:column;gap:12px}',
   '.dsh-recall-cardbtn{appearance:none;width:100%;font:inherit;color:inherit;text-align:left;cursor:pointer;background:0 0;border:0;border-radius:12px;align-items:center;gap:12px;padding:14px 16px;display:flex}',
-  '.dsh-recall-cfg-row{display:grid;grid-template-columns:max-content minmax(0,1fr);column-gap:8px;row-gap:4px;align-items:start}',
+  // 折叠头（SectionToggle）复用卡片头 cardbtn：14/16px 内边距在卡片 body 内表现为
+  // 16px 左缩进，与分组标题/表单内容错位（用户实测反馈）——body 内覆写为贴左，
+  // 卡片头（.dsh-recall-card 直接子级）不受影响。
+  '.dsh-recall-card-body .dsh-recall-cardbtn{padding:6px 0}',
+  // cfg-grid：ConfigForm 全部行共享的单一 grid 容器。此前每行 cfg-row 是独立
+  // grid，「第一列 max-content」各行各算，跨行对齐从未成立（checkbox/输入框
+  // 列参差）；cfg-row 改 display:contents 透明化后，label/控件行/hint 直接成为
+  // 本容器的 item，第一列列宽由全表单最长 label 决定——跨行对齐自此成立。
+  '.dsh-recall-cfg-grid{display:grid;grid-template-columns:max-content minmax(0,1fr);column-gap:8px;row-gap:4px;align-items:start}',
+  '.dsh-recall-cfg-row{display:contents}',
+  '.dsh-recall-cfg-grid > .dsh-recall-cardbtn{grid-column:1/-1}',
   // V5 表单分组小标题：语义分组分隔符，字号与 hint 同级、加粗 + label-secondary
-  // 作层级区分，不引入第三层字阶。
-  '.dsh-recall-cfg-group{color:var(--dsw-alias-label-secondary);font-size:13px;line-height:1.5;font-weight:600}',
+  // 作层级区分，不引入第三层字阶；占满整行，margin-top 补组间分隔（首组清零）。
+  '.dsh-recall-cfg-group{color:var(--dsw-alias-label-secondary);font-size:13px;line-height:1.5;font-weight:600;grid-column:1/-1;margin-top:4px}',
+  '.dsh-recall-cfg-group:first-child{margin-top:0}',
   // V4 后 cfg-line 只装控件（label 已是 cfg-row 直接子元素，占 grid 第一列 max-content）
   '.dsh-recall-cfg-line{display:flex;align-items:center;gap:8px;min-width:0;grid-column:2}',
   '.dsh-recall-cfg-label{color:var(--dsw-alias-label-secondary);font-size:13px;line-height:1.5}',
   '.dsh-recall-cfg-input{flex:1;min-width:0;box-sizing:border-box;font:inherit;font-size:13px;color:var(--dsw-alias-label-primary);background:var(--dsw-alias-bg-base);border:1px solid var(--dsw-alias-border-l2);border-radius:8px;padding:4px 8px}',
   '.dsh-recall-cfg-input:disabled{opacity:.5}',
   '.dsh-recall-cfg-area{font-family:inherit;font-size:12px;line-height:1.5;color:var(--dsw-alias-label-primary);background:var(--dsw-alias-bg-base);border:1px solid var(--dsw-alias-border-l2);border-radius:8px;padding:6px 8px;min-height:64px;box-sizing:border-box;width:100%;grid-column:2}',
-  '.dsh-recall-cfg-hint{color:var(--dsw-alias-label-tertiary);font-size:12px;line-height:1.5;grid-column:2}',
+  '.dsh-recall-cfg-hint{color:var(--dsw-alias-label-tertiary);font-size:12px;line-height:1.5;grid-column:2;padding-bottom:4px}',
   // V4/V8 共用 480px 断点：cfg 表单单列堆叠（V4）；exclude quick 行输入框独占
   // 一行（flex:1 1 100%，basis 100% 强制换行，添加按钮与芯片建议另起一行）、
   // panel-actions 长状态文案不再挤压按钮（wrap 已在基础规则，此处无需重复）。
-  '@media (max-width:480px){.dsh-recall-cfg-row{grid-template-columns:minmax(0,1fr);row-gap:2px}.dsh-recall-cfg-line,.dsh-recall-cfg-hint,.dsh-recall-cfg-area{grid-column:auto}.dsh-recall-ex-quick .dsh-recall-ex-input{flex:1 1 100%}}',
+  '@media (max-width:480px){.dsh-recall-cfg-grid{grid-template-columns:minmax(0,1fr);row-gap:2px}.dsh-recall-cfg-line,.dsh-recall-cfg-hint,.dsh-recall-cfg-area{grid-column:auto}.dsh-recall-ex-quick .dsh-recall-ex-input{flex:1 1 100%}}',
   '.dsh-recall-cfg-tag{flex:none;font-size:12px;line-height:1.4;padding:1px 6px;border-radius:6px;background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-tertiary)}',
   // 已修改（用户改了配置）用 warn 底色提示「有未保存变更」——修改不是错误，
   // warn 家族来自 V1 核验的官方配对（tertiary 底 + label 文）。

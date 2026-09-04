@@ -189,6 +189,11 @@ export function buildConfigForm(
     }
 
     return React.createElement('div', { className: 'dsh-recall-ex-card' },
+      // 全部行包进单一 cfg-grid：cfg-row 是 display:contents 透明层（css.ts），
+      // label/控件行/hint 直接成为同一 grid 的 item，第一列 max-content 由全表单
+      // 最长 label 决定——checkbox 与数字输入框的控件列自此跨行对齐（此前每行
+      // 是独立 grid 容器，max-content 各算各的，跨行对齐从未成立，实测参差）。
+      React.createElement('div', { className: 'dsh-recall-cfg-grid' },
       // V5 表单分组：9 字段平铺 → 「快照行为 / 自动治理」两组语义分组小标题，
       // 降低认知负担；「高级：基础排除表」沿用 SectionToggle 折叠，不重复加标题。
       React.createElement('div', { className: 'dsh-recall-cfg-group' }, '快照行为'),
@@ -246,6 +251,22 @@ export function buildConfigForm(
       numRow('maxFileBytes', '文件大小上限', '超过该大小的文件不进快照、不被回退触碰（单位 MB，支持小数）', { suffix: 'MB', min: 0.01, step: 0.5 }),
       numRow('maxSnapshotsPerWorkspace', '快照总量上限', '每个工作区保留的最大快照数，超限自动删除最旧的；填 0 表示不限制', { min: 0, step: 1 }),
       numRow('retentionDays', '快照保留天数', '按天数保留快照，超期自动删除最旧的；填 0 表示不启用（与快照总数上限各自生效）', { min: 0, step: 1 }),
+      // 操作区在「高级」折叠头之前：按钮服务整个表单（含折叠区之外的字段），
+      // 排在折叠头之后会被误读为折叠区内容、折叠时像漏收起（用户实测反馈）；
+      // 因此也不把按钮藏进折叠分支——否则折叠高级区后将无法保存。
+      React.createElement('div', { className: 'dsh-recall-panel-actions' },
+        state.message ? React.createElement('span', { role: 'status', 'aria-live': 'polite', className: 'dsh-recall-ex-status' + (state.error ? ' dsh-recall-ex-status-error' : ' dsh-recall-ex-status-success') }, (state.error ? '错误：' : '') + state.message) : null,
+        React.createElement('button', { type: 'button', className: 'dsh-recall-btn', disabled: state.busy || !writable, onClick: () => setDraft(baseline ? Object.assign({}, baseline) : null) }, '放弃修改'),
+        React.createElement('button', {
+          type: 'button',
+          className: 'dsh-recall-btn',
+          disabled: state.busy || !writable,
+          title: '把所有字段恢复到插件出厂默认值',
+          onClick: resetDefaults
+        }, '恢复默认'),
+        React.createElement('button', { type: 'button', className: 'dsh-recall-btn', disabled: state.busy || !writable, onClick: save }, '保存'),
+        !writable ? React.createElement('span', { className: 'dsh-recall-cfg-tag' }, '只读设置源') : null
+      ),
       React.createElement(SectionToggle, { title: '高级：基础排除表', open: showAdvanced, onToggle: () => setShowAdvanced((v) => !v) }),
       showAdvanced ? React.createElement('div', { className: 'dsh-recall-cfg-row', key: 'baseExcludes' },
         // V4：label 上提（与 numRow 同法）；cfg-line 只剩 tags，textarea/hint 各自归第二列
@@ -263,19 +284,7 @@ export function buildConfigForm(
           onChange: (e: import('react').ChangeEvent<HTMLTextAreaElement>) => edit('baseExcludes', e.target.value),
         }),
         React.createElement('div', { className: 'dsh-recall-cfg-hint' }, '内置规则，每个工作区共享，建议保持默认；gitignore 语法每行一条，优先级低于「排除配置」里的 exclude.txt（S3-2 折叠）')
-      ) : null,
-      React.createElement('div', { className: 'dsh-recall-panel-actions' },
-        state.message ? React.createElement('span', { role: 'status', 'aria-live': 'polite', className: 'dsh-recall-ex-status' + (state.error ? ' dsh-recall-ex-status-error' : ' dsh-recall-ex-status-success') }, (state.error ? '错误：' : '') + state.message) : null,
-        React.createElement('button', { type: 'button', className: 'dsh-recall-btn', disabled: state.busy || !writable, onClick: () => setDraft(baseline ? Object.assign({}, baseline) : null) }, '放弃修改'),
-        React.createElement('button', {
-          type: 'button',
-          className: 'dsh-recall-btn',
-          disabled: state.busy || !writable,
-          title: '把所有字段恢复到插件出厂默认值',
-          onClick: resetDefaults
-        }, '恢复默认'),
-        React.createElement('button', { type: 'button', className: 'dsh-recall-btn', disabled: state.busy || !writable, onClick: save }, '保存'),
-        !writable ? React.createElement('span', { className: 'dsh-recall-cfg-tag' }, '只读设置源') : null
+      ) : null
       )
     )
   }
