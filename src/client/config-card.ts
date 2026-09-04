@@ -249,12 +249,13 @@ export function buildConfigForm(
       React.createElement(SectionToggle, { title: '高级：基础排除表', open: showAdvanced, onToggle: () => setShowAdvanced((v) => !v) }),
       showAdvanced ? React.createElement('div', { className: 'dsh-recall-cfg-row', key: 'baseExcludes' },
         // V4：label 上提（与 numRow 同法）；cfg-line 只剩 tags，textarea/hint 各自归第二列
-        React.createElement('label', { className: 'dsh-recall-cfg-label' }, '基础排除表'),
+        React.createElement('label', { className: 'dsh-recall-cfg-label', htmlFor: 'dsh-recall-cfg-baseExcludes' }, '基础排除表'),
         React.createElement('div', { className: 'dsh-recall-cfg-line' },
           draft.baseExcludes !== baseline.baseExcludes ? React.createElement('span', { className: 'dsh-recall-cfg-tag dsh-recall-cfg-tag-modified' }, '已修改') : null,
           overridden && overridden.baseExcludes !== undefined ? React.createElement('span', { className: 'dsh-recall-cfg-tag' }, '已覆盖') : null
         ),
         React.createElement('textarea', {
+          id: 'dsh-recall-cfg-baseExcludes',
           className: 'dsh-recall-cfg-area',
           rows: 4,
           value: draft.baseExcludes,
