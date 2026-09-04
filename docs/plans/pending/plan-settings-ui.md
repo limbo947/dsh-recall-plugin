@@ -185,6 +185,15 @@ css.ts（cfg-row / cfg-label / cfg-hint / tree-children）；settings-cards.ts �
 
 - grid 兼容性：DSH 内核为现代 Chromium，官方设置页自身使用现代布局，风险低（动手前可对照官方设置卡片构建产物确认）。纯样式重构，回退 = git revert。
 
+### 实施记录（2026-09-04）
+
+- **落地差异（计划假设修正）**：「settings-cards.ts 结构零改动」不成立——label 嵌套在 `.cfg-line`（flex 行）内无法作为共享 grid 容器的跨行一列成员；`display:contents`/`subgrid` 都会让 input+suffix+tag 四散成独立网格单元、破坏控件同行簇。采用最小结构改动：**label 上提为 `.cfg-row` 直接子元素**（第一列 `max-content`），config-card.ts 共 5 处（numRow + 三个 checkbox 行 + baseExcludes 行）各移动一个元素，htmlFor-id 关联（V2）、行为、语义零变化。
+- 任务 1：`.cfg-row` 改 grid（`max-content minmax(0,1fr)`）；`.cfg-line`/`.cfg-hint`/`.cfg-area` 归 `grid-column:2`；删除 `.cfg-label` 定宽 130px 与 `.cfg-hint` 的 `padding-left:138px`——魔法数全灭（全文 grep 0 命中）。
+- 任务 2：≤480px 媒体查询表单单列堆叠（label 独占行、hint 缩进归零、控件满宽）；`grid-column:2` 复位 `auto` 防单列下越界。此断点与 V8 共用（V8 复用同一条）。
+- 任务 3：`--dsh-recall-tree-indent:24px`（= toggle 18px + gap 6px）声明于 `:root`，`.tree-children` 的 margin/padding 改 `calc(var(--dsh-recall-tree-indent)*2/3)` / `calc(var(--dsh-recall-tree-indent)/3)`（16/8 拆分不变）——对齐从巧合变契约。
+- 任务 4：suffix tag 与 input 同行形态保持（grid 第二列内 flex 行）。
+- 验收：typecheck + build + 单测 296 例全绿。360–480px 窄面板实弹与视觉对照（改长 label 不错位）列入发版前冒烟。
+
 ***
 
 ## V5 表单分组 + 危险操作固定位

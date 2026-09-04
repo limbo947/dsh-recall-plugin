@@ -145,9 +145,11 @@ export function buildConfigForm(
       const locked = Boolean(envLocks && envLocks[key])
       const changed = Boolean(draft && baseline && draft[key] !== baseline[key])
       return React.createElement('div', { className: 'dsh-recall-cfg-row', key: key },
+        // V4：label 上提为 cfg-row 直接子元素——grid 第一列（max-content）跨行
+        // 对齐最长标签，消灭 130px 定宽魔法数与 hint 138px 缩进耦合；
+        // htmlFor-id 关联不变（V2）
+        React.createElement('label', { className: 'dsh-recall-cfg-label', htmlFor: 'dsh-recall-cfg-' + key }, label),
         React.createElement('div', { className: 'dsh-recall-cfg-line' },
-          // V2：数字输入 label/input 经 htmlFor-id 关联（与 checkbox 行既有模式一致），读屏可播报字段名与值
-          React.createElement('label', { className: 'dsh-recall-cfg-label', htmlFor: 'dsh-recall-cfg-' + key }, label),
           React.createElement('input', {
             id: 'dsh-recall-cfg-' + key,
             className: 'dsh-recall-cfg-input',
@@ -188,8 +190,9 @@ export function buildConfigForm(
 
     return React.createElement('div', { className: 'dsh-recall-ex-card' },
       React.createElement('div', { className: 'dsh-recall-cfg-row', key: 'snapshotEnabled' },
+        // V4：label 上提（与 numRow 同法）
+        React.createElement('label', { className: 'dsh-recall-cfg-label', htmlFor: 'dsh-recall-cfg-snapshot' }, '启用快照'),
         React.createElement('div', { className: 'dsh-recall-cfg-line' },
-          React.createElement('label', { className: 'dsh-recall-cfg-label', htmlFor: 'dsh-recall-cfg-snapshot' }, '启用快照'),
           React.createElement('input', {
             id: 'dsh-recall-cfg-snapshot',
             type: 'checkbox',
@@ -208,8 +211,9 @@ export function buildConfigForm(
       numRow('maxSnapshotsPerWorkspace', '快照总量上限', '每个工作区保留的最大快照数，超限自动删除最旧的；填 0 表示不限制', { min: 0, step: 1 }),
       numRow('retentionDays', '快照保留天数', '按天数保留快照，超期自动删除最旧的；填 0 表示不启用（与快照总数上限各自生效）', { min: 0, step: 1 }),
       React.createElement('div', { className: 'dsh-recall-cfg-row', key: 'refillDraft' },
+        // V4：label 上提（与 numRow 同法）
+        React.createElement('label', { className: 'dsh-recall-cfg-label', htmlFor: 'dsh-recall-cfg-refill' }, '撤回后回填输入框'),
         React.createElement('div', { className: 'dsh-recall-cfg-line' },
-          React.createElement('label', { className: 'dsh-recall-cfg-label', htmlFor: 'dsh-recall-cfg-refill' }, '撤回后回填输入框'),
           React.createElement('input', {
             id: 'dsh-recall-cfg-refill',
             type: 'checkbox',
@@ -223,8 +227,9 @@ export function buildConfigForm(
         React.createElement('div', { className: 'dsh-recall-cfg-hint' }, '撤回成功后把被撤回的消息文本回填到输入框，方便修改后重新发送')
       ),
       React.createElement('div', { className: 'dsh-recall-cfg-row', key: 'archiveOriginal' },
+        // V4：label 上提（与 numRow 同法）
+        React.createElement('label', { className: 'dsh-recall-cfg-label', htmlFor: 'dsh-recall-cfg-archive' }, '撤回后归档原会话'),
         React.createElement('div', { className: 'dsh-recall-cfg-line' },
-          React.createElement('label', { className: 'dsh-recall-cfg-label', htmlFor: 'dsh-recall-cfg-archive' }, '撤回后归档原会话'),
           React.createElement('input', {
             id: 'dsh-recall-cfg-archive',
             type: 'checkbox',
@@ -239,8 +244,9 @@ export function buildConfigForm(
       ),
       React.createElement(SectionToggle, { title: '高级：基础排除表', open: showAdvanced, onToggle: () => setShowAdvanced((v) => !v) }),
       showAdvanced ? React.createElement('div', { className: 'dsh-recall-cfg-row', key: 'baseExcludes' },
+        // V4：label 上提（与 numRow 同法）；cfg-line 只剩 tags，textarea/hint 各自归第二列
+        React.createElement('label', { className: 'dsh-recall-cfg-label' }, '基础排除表'),
         React.createElement('div', { className: 'dsh-recall-cfg-line' },
-          React.createElement('label', { className: 'dsh-recall-cfg-label' }, '基础排除表'),
           draft.baseExcludes !== baseline.baseExcludes ? React.createElement('span', { className: 'dsh-recall-cfg-tag dsh-recall-cfg-tag-modified' }, '已修改') : null,
           overridden && overridden.baseExcludes !== undefined ? React.createElement('span', { className: 'dsh-recall-cfg-tag' }, '已覆盖') : null
         ),

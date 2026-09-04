@@ -9,7 +9,7 @@ export const CSS = [
   // 语义变量集中声明（V1-5）：btn-danger 的 hover 亮度是令牌体系外补丁，
   // 集中成单一来源避免散落硬编码；前景色用官方实证配对 bg-layer-3（error
   // primary 底色上文本随主题翻转，见 plan-settings-ui V1 核验记录）。
-  ':root{--dsh-recall-btn-danger-hover:brightness(1.08)}',
+  ':root{--dsh-recall-btn-danger-hover:brightness(1.08);--dsh-recall-tree-indent:24px}',
   '.dsh-recall-row{flex-direction:column;align-items:flex-end;gap:6px;display:flex}',
   '.dsh-recall-stack{flex-direction:column;align-items:flex-end;gap:8px;min-width:0;max-width:min(525px,82%);display:flex}',
   '.dsh-recall-bubble{background:var(--dsw-specific-bubble);max-width:100%;color:var(--dsw-alias-label-primary);border-radius:22px;padding:10px 16px;font-size:16px;line-height:24px;white-space:pre-wrap;word-break:break-word}',
@@ -75,7 +75,10 @@ export const CSS = [
   '.dsh-recall-tree-name{flex:none;font-weight:600;color:var(--dsw-alias-label-secondary)}',
   '.dsh-recall-tree-title{min-width:0;color:var(--dsw-alias-label-primary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}',
   '.dsh-recall-tree-meta{flex:none;font-size:11px;line-height:18px;color:var(--dsw-alias-label-tertiary);white-space:nowrap}',
-  '.dsh-recall-tree-children{display:flex;flex-direction:column;gap:1px;margin-left:16px;border-left:1px solid var(--dsw-alias-border-l1);padding-left:8px}',
+  // V4 树缩进契约化：总缩进 = --dsh-recall-tree-indent（折叠钮 18px + gap 6px），
+  // children 按 2/3（16px margin）与 1/3（8px padding）拆分，恰好让子行文字
+  // 与父行折叠钮右缘对齐——把「16+8 恰等于 18+6」的巧合变成单一事实源。
+  '.dsh-recall-tree-children{display:flex;flex-direction:column;gap:1px;margin-left:calc(var(--dsh-recall-tree-indent)*2/3);border-left:1px solid var(--dsw-alias-border-l1);padding-left:calc(var(--dsh-recall-tree-indent)/3)}',
   '.dsh-recall-tree-confirm{display:flex;gap:8px;align-items:center;font-size:12px;line-height:20px;color:var(--dsw-alias-label-secondary)}',
   '.dsh-recall-card{border:1px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-layer-3);border-radius:12px;list-style:none;transition:border-color .16s,background .16s;display:flex;flex-direction:column;text-align:left}',
   '.dsh-recall-card.dsh-recall-card-open{background:var(--dsw-alias-bg-layer-2);border-color:var(--dsw-alias-label-dimmed)}',
@@ -84,13 +87,18 @@ export const CSS = [
   '.dsh-recall-card-desc{color:var(--dsw-alias-label-tertiary);font-size:13px;line-height:1.5}',
   '.dsh-recall-card-body{border-top:1px solid var(--dsw-alias-border-l2);margin:0 16px;padding:12px 0 8px;display:flex;flex-direction:column;gap:12px}',
   '.dsh-recall-cardbtn{appearance:none;width:100%;font:inherit;color:inherit;text-align:left;cursor:pointer;background:0 0;border:0;border-radius:12px;align-items:center;gap:12px;padding:14px 16px;display:flex}',
-  '.dsh-recall-cfg-row{display:flex;flex-direction:column;gap:4px}',
-  '.dsh-recall-cfg-line{display:flex;align-items:center;gap:8px}',
-  '.dsh-recall-cfg-label{flex:none;width:130px;color:var(--dsw-alias-label-secondary);font-size:13px;line-height:20px}',
+  '.dsh-recall-cfg-row{display:grid;grid-template-columns:max-content minmax(0,1fr);column-gap:8px;row-gap:4px;align-items:start}',
+  // V4 后 cfg-line 只装控件（label 已是 cfg-row 直接子元素，占 grid 第一列 max-content）
+  '.dsh-recall-cfg-line{display:flex;align-items:center;gap:8px;min-width:0;grid-column:2}',
+  '.dsh-recall-cfg-label{color:var(--dsw-alias-label-secondary);font-size:13px;line-height:20px}',
   '.dsh-recall-cfg-input{flex:1;min-width:0;box-sizing:border-box;font:inherit;font-size:13px;color:var(--dsw-alias-label-primary);background:var(--dsw-alias-bg-base);border:1px solid var(--dsw-alias-border-l2);border-radius:8px;padding:4px 8px}',
   '.dsh-recall-cfg-input:disabled{opacity:.5}',
-  '.dsh-recall-cfg-area{font-family:inherit;font-size:12px;line-height:18px;color:var(--dsw-alias-label-primary);background:var(--dsw-alias-bg-base);border:1px solid var(--dsw-alias-border-l2);border-radius:8px;padding:6px 8px;min-height:64px}',
-  '.dsh-recall-cfg-hint{color:var(--dsw-alias-label-tertiary);font-size:12px;line-height:18px;padding-left:138px}',
+  '.dsh-recall-cfg-area{font-family:inherit;font-size:12px;line-height:18px;color:var(--dsw-alias-label-primary);background:var(--dsw-alias-bg-base);border:1px solid var(--dsw-alias-border-l2);border-radius:8px;padding:6px 8px;min-height:64px;box-sizing:border-box;width:100%;grid-column:2}',
+  '.dsh-recall-cfg-hint{color:var(--dsw-alias-label-tertiary);font-size:12px;line-height:18px;grid-column:2}',
+  // V4 窄屏断点（≤480px，与 V8 共用同一断点）：表单单列堆叠——label 独占
+  // 一行、hint 缩进天然归零、控件满宽；grid-column:2 需复位为 auto 否则
+  // 单列下显式列 2 会越界占位。
+  '@media (max-width:480px){.dsh-recall-cfg-row{grid-template-columns:minmax(0,1fr);row-gap:2px}.dsh-recall-cfg-line,.dsh-recall-cfg-hint,.dsh-recall-cfg-area{grid-column:auto}}',
   '.dsh-recall-cfg-tag{flex:none;font-size:11px;line-height:16px;padding:1px 6px;border-radius:6px;background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-tertiary)}',
   // 已修改（用户改了配置）用 warn 底色提示「有未保存变更」——修改不是错误，
   // warn 家族来自 V1 核验的官方配对（tertiary 底 + label 文）。
