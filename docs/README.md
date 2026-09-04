@@ -26,6 +26,8 @@ docs/
 │       ├── plan-ts-refactor-m1..m8.md       # TS 迁移 M1–M8 阶段实施文档（随总计划归档）
 │       ├── smoke-checklist.md               # 冒烟测试待办清单（七节全部通过，2026-08-29）
 │       └── smoke-checklist-records.md       # 冒烟测试执行记录（随清单归档）
+├── upgrade-assessments/   # dsh 版本升级影响评估（版本快照，随版本归档，无完成态流转）
+│   └── dsh-0.1.3-alpha.1.md    # 0.1.3-alpha.1 影响评估（2026-09-04，契约零破坏/行为级影响）
 └── screenshots/     # README 与文档引用的截图素材（只增不删，删前查引用）
 ```
 
@@ -39,6 +41,7 @@ docs/
 | 冒烟 / 回归验证清单 | `docs/plans/pending/`，全部执行完移入 `completed/` | `smoke-<范围>.md` | `pending/smoke-checklist.md` |
 | 长期规范文档（存储格式、安全模型等） | `docs/` 根 | 小写单词，不带 plan | `dsh-contract.md`；未来的 `format.md`、`security.md`（见 pending/plan-p2.md P2-2） |
 | 调研报告 | `docs/plans/`（与衍生计划放一起，积累多了再拆 `research/`） | `research-<主题>.md` | `research-competitors.md` |
+| dsh 版本升级影响评估 | `docs/upgrade-assessments/` | `dsh-<版本号>.md`（版本快照，无完成态，不进 plans 状态目录；每 dsh 版本一份） | `dsh-0.1.3-alpha.1.md` |
 
 区分标准一句话：**计划是「要做的事」有完成态，规范是「一直成立的事实」无完成态**——前者进 plans/，后者放根目录。
 
