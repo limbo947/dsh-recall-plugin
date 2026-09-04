@@ -245,6 +245,12 @@ settings-cards.ts（ManageCard 健康行与错误区渲染）；css.ts（pill / 
 
 - 无（展示层重排，数据源不变）。
 
+### 实施记录（2026-09-04）
+
+- 任务 1 健康行徽章化：`ManageCard` 的 git 状态从灰色文案升级为彩色 pill——成功 `success-tertiary` 底 + `success-primary` 文、失败 `interactive-bg-hover-danger` 底 + `error-primary` 文（均为官方状态行实证配对；error 无 tertiary 令牌，核验后采用官方 failed 行的 `interactive-bg-hover-danger` 搭配）。渲染位置在搜索框与树之前（原位置即满足「树之前」），pill 附 title「快照引擎依赖 git」；存储计数（home N / 降级 M）维持文字。
+- 任务 2「最近错误」区升级：标题改 `.dsh-recall-errors-title`（error 色 + `font-weight:600`）并内嵌条数徽章「最近错误 (N)」；整个错误区从卡片最底部上移到「全部删除确认条」之后、操作区（panel-actions）之前；每条错误时间戳格式维持原样。
+- 验收：typecheck + build + 单测 296 例全绿。断 git（PATH 移除）实弹验证与双主题视觉对照列入发版前冒烟（「断 git 实弹」标注待冒烟——需活体 dsh 环境，本仓单测无法替代）。
+
 ***
 
 ## V7 排版收敛

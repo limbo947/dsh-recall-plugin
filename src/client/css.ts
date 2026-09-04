@@ -54,6 +54,14 @@ export const CSS = [
   '.dsh-recall-ex-status{margin-right:auto;font-size:12px;line-height:20px;color:var(--dsw-alias-label-tertiary)}',
   '.dsh-recall-ex-status-error{color:var(--dsw-alias-state-error-primary)}',
   '.dsh-recall-ex-status-success{color:var(--dsw-alias-state-success-primary)}',
+  // V6 健康徽章（git 可用性）：pill 配色直接复用官方状态行配对——成功用
+  // success-tertiary 底、失败用 interactive-bg-hover-danger 底（error 无
+  // tertiary 令牌，官方失败状态行即用此搭配，主题感知）。
+  '.dsh-recall-health-pill{display:inline-flex;align-items:center;padding:1px 10px;border-radius:999px;font-size:12px;line-height:20px}',
+  '.dsh-recall-health-pill-ok{background:var(--dsw-alias-state-success-tertiary);color:var(--dsw-alias-state-success-primary)}',
+  '.dsh-recall-health-pill-bad{background:var(--dsw-alias-interactive-bg-hover-danger);color:var(--dsw-alias-state-error-primary)}',
+  // V6 错误区标题：error 色 + 条数，错误不再是灰色小字（fail-loud 可见性）
+  '.dsh-recall-errors-title{color:var(--dsw-alias-state-error-primary);font-size:12px;line-height:20px;font-weight:600}',
   '.dsh-recall-tree{display:flex;flex-direction:column;gap:2px;padding:4px 0}',
   '.dsh-recall-tree-node{display:flex;flex-direction:column;gap:1px}',
   '.dsh-recall-tree-row{display:flex;gap:6px;align-items:center;min-width:0;padding:2px 4px;border-radius:6px;cursor:default}',

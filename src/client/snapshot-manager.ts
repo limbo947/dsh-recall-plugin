@@ -382,9 +382,13 @@ export function buildSnapshotManager(React: ReactApi, util: UtilApi, sessionsSvc
           ? countText + '。'
           : countText + '，全部工作区快照存储占用 ' + sizeText(usage) + '。'
       ),
+      // V6 健康行徽章化：git 状态用彩色 pill（成功/失败，官方状态行配对），
+      // 从普通 note 提升为卡片顶部横幅（渲染在搜索框与树之前）；存储计数
+      // 维持文字，避免 pill 堆叠丢失信息。
       health ? React.createElement('div', { className: 'dsh-recall-ex-note', key: 'health' },
         React.createElement('span', {
-          className: health.gitAvailable ? '' : 'dsh-recall-ex-status-error'
+          className: 'dsh-recall-health-pill ' + (health.gitAvailable ? 'dsh-recall-health-pill-ok' : 'dsh-recall-health-pill-bad'),
+          title: '快照引擎依赖 git'
         }, health.gitAvailable ? 'git 可用' : 'git 不可用（快照引擎依赖 git）'),
         ' · 快照存储：home ' + health.homeStores + ' 个工作区' + (health.fallbackStores ? '，降级 ' + health.fallbackStores + ' 个' : '')
       ) : null,
@@ -411,6 +415,18 @@ export function buildSnapshotManager(React: ReactApi, util: UtilApi, sessionsSvc
         ? React.createElement('div', { className: 'dsh-recall-ex-note', key: 'no-match' }, '无匹配快照')
         : null,
       renderDeleteAllConfirm(),
+      // V6：错误区从卡片最底上移到操作区上方（fail-loud 可见性）；标题
+      // error 色带条数徽章，时间戳格式维持原样
+      errors && errors.length > 0
+        ? React.createElement('div', { key: 'errors' },
+            React.createElement('div', { className: 'dsh-recall-errors-title' }, '最近错误 (' + errors.length + ')'),
+            (showAllErrors ? errors : errors.slice(0, 5)).map((e, i) => React.createElement('div', { key: i, className: 'dsh-recall-ex-note' }, clockText(e.time) + '  ' + e.message)),
+            React.createElement('div', { className: 'dsh-recall-panel-actions' },
+              errors.length > 5 ? React.createElement('button', { type: 'button', className: 'dsh-recall-ex-chip', onClick: () => setShowAllErrors((v) => !v) }, showAllErrors ? '收起' : '展开全部 (' + errors.length + ')') : null,
+              React.createElement('button', { type: 'button', className: 'dsh-recall-ex-chip', onClick: clearErrors }, '清空')
+            )
+          )
+        : null,
       React.createElement('div', { className: 'dsh-recall-panel-actions' },
         state.message ? React.createElement('span', { role: 'status', 'aria-live': 'polite', className: 'dsh-recall-ex-status' + (state.error ? ' dsh-recall-ex-status-error' : ' dsh-recall-ex-status-success') }, (state.error ? '错误：' : '') + state.message) : null,
         limit < total ? React.createElement('button', {
@@ -434,19 +450,7 @@ export function buildSnapshotManager(React: ReactApi, util: UtilApi, sessionsSvc
           title: '立即对全部工作区执行一次 git gc（压缩对象库释放空间）',
           onClick: () => run('gc', {}, 'gc 完成')
         }, '立即 gc')
-      ),
-      errors && errors.length > 0
-        ? React.createElement('div', { className: 'dsh-recall-ex-note', key: 'errors' },
-            React.createElement('div', { className: 'dsh-recall-ex-status' },
-              '最近错误：',
-              (showAllErrors ? errors : errors.slice(0, 5)).map((e, i) => React.createElement('div', { key: i, className: 'dsh-recall-ex-note' }, clockText(e.time) + '  ' + e.message))
-            ),
-            React.createElement('div', { className: 'dsh-recall-panel-actions' },
-              errors.length > 5 ? React.createElement('button', { type: 'button', className: 'dsh-recall-ex-chip', onClick: () => setShowAllErrors((v) => !v) }, showAllErrors ? '收起' : '展开全部 (' + errors.length + ')') : null,
-              React.createElement('button', { type: 'button', className: 'dsh-recall-ex-chip', onClick: clearErrors }, '清空')
-            )
-          )
-        : null
+      )
     )
   }
 
