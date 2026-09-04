@@ -97,8 +97,16 @@
 
 **发现（按严重度）**：
 
-1. **[观察·不阻塞] 浏览器自动化能力边界**：无 CDP 设备仿真/真实视口调整，合成键盘事件无 isTrusted——窄屏 400px 终验、Enter/Space 真实键触发、读屏（Narrator/NVDA）播报均留人工复核（环境受限，非产品缺陷）。
-2. **[观察（设计差异，非缺陷）] ConfigForm 保存按钮未做 dirty 禁用**：与 ExcludeCard 的模式不一致（其 dirty 判定 → disabled）；计划 V3-1 只要求 disabled 态 css 可识别。如未来统一，可给 ConfigForm 补 dirty 判定（复用 ExcludeCard 现成模式），超本期范围。
-3. **[过程备忘] 浏览器自动化工具无法直接点击被透明覆盖层拦截的按钮**与上轮（第八节外）一致：全程用页面内 evaluate 触发 click；dsh settings 页「通用」外观切浅色/深色可用（本轮浅色对照已还原深色）。
+1. **[方法·本机不可行] 「断 git（PATH 移除）」实弹无法模拟**：活体验证两次尝试均失败，根因三层——① `resolveGitScript` **按设计不依赖 PATH**（[store.ts](../../../src/host/store.ts) L304 注释明言「脚本里用绝对路径调用，避免每条命令依赖 PATH」），硬编码探测 `%ProgramFiles%\Git\cmd\git.exe` / `%(x86)%` / `%LocalAppData%\Programs\Git\cmd\git.exe`；② Windows 的 `ProgramFiles` 等 well-known 变量是 **per-process 伪变量，子进程不可继承篡改值**（幂等复验：`$env:ProgramFiles` 赋值后 node / Start-Process powershell 均还原为实际安装路径 `C:\Program Files`）；③ 真断 git 只剩文件系统级改名 `C:\Program Files\Git`，会全局破坏本机 git 消费者（含复验要用到的 git 本身），风险不承接。**处置**：失败态 pill（`health.gitAvailable=false` → `.dsh-recall-health-pill-bad`）为 ok 分支的同渲染路径镜像（条件 `gitAvailable ? pill-ok : pill-bad` 已在实弹中走通 ok 分支 + 计算样式绿），改**代码级镜像核验 + 标注待隔离环境**（CI 容器不装 git 跑 dsh web 断言 pill-bad）终验；该模拟方法本身的局限写入计划 V6 实施记录供日后参考。
+2. **[观察·不阻塞] 浏览器自动化能力边界**：无 CDP 设备仿真/真实视口调整，合成键盘事件无 isTrusted——窄屏 400px 终验、Enter/Space 真实键触发、读屏（Narrator/NVDA）播报均留人工复核（环境受限，非产品缺陷）。
+3. **[观察（设计差异，非缺陷）] ConfigForm 保存按钮未做 dirty 禁用**：与 ExcludeCard 的模式不一致（其 dirty 判定 → disabled）；计划 V3-1 只要求 disabled 态 css 可识别。如未来统一，可给 ConfigForm 补 dirty 判定（复用 ExcludeCard 现成模式），超本期范围。
+4. **[过程备忘] 浏览器自动化工具无法直接点击被透明覆盖层拦截的按钮**与上轮（第八节外）一致：全程用页面内 evaluate 触发 click；dsh settings 页「通用」外观切浅色/深色可用（本轮浅色对照已还原深色）。
+5. **[过程备忘] dsh web 的 browser-trust 围栏**：`dsh web --no-open` 需带一次性令牌 URL（启动日志打印）访问，裸地址 401；profile 依赖在 npm↔link 切换须用 `pnpm add dsh-recall-plugin@<spec>` 强制（`pnpm install` 对 lockfile 差异可能「Already up to date」不重链，junction 残留，本次实测）。
 
-**发版判定**：设置页 UI 批次（V1–V9）冒烟基本通过（自动化全覆盖 + 双主题 + 功能回归零报错）；剩余 3 项人工复核（真实窄视口、真实键盘 Enter/Space、读屏播报）不阻塞代码质量，随发版前人工冒烟补齐。计划文档保持「已实施（待冒烟）」留 pending/，人工项完成后移入 completed/（按 docs 生命周期第 2 条同步三处链接）。
+**发版判定**：设置页 UI 批次（V1–V9）冒烟基本通过（自动化全覆盖 + 双主题 + 功能回归零报错）；剩余复核项不阻塞代码质量、随发版前补齐——真实窄视口终验、真实键盘 Enter/Space、读屏播报 3 项人工复核 + 「断 git 失败态」隔离环境终验（本机方法不可行，见发现 1，代码级镜像核验已过）。计划文档保持「已实施（待冒烟）」留 pending/，上述复核完成后移入 completed/（按 docs 生命周期第 2 条同步三处链接）。
+
+## 2026-09-04 冒烟补充：断 git（PATH 移除）模拟方法可行性探究（第八节附）
+
+- **目的**：补 V6 验收「断 git（PATH 移除）实弹验证一次」（计划冒烟路径第 4 项遗留）。
+- **过程与根因**（详见上节发现 1）：两次尝试（纯 PATH 移除；PATH 移除 + `ProgramFiles` 环境变量改指向不存在目录）均 `gitAvailable:true`。复刻 `resolveGitScript` 逻辑在等价 env 下解析为空，而真实服务器进程却解析出 `C:\Program Files\Git\cmd\git.exe`——定位到 Windows 对该类 well-known 变量（ProgramFiles 系）在子进程创建时强制重算，环境变量层面无法欺骗；结合模板对标准安装路径的硬编码探测，「PATH 移除」模拟对插件失效（这本身是插件的健壮性红利：DSH 进程 PATH 不含 git 也能用）。
+- **结论**：本机安全边界内无法构造「git 不可用」；失败态验证改代码级镜像（渲染路径同一、条件取反）+ 建议隔离环境（如 CI 容器不装 git）终验。此项由「待冒烟」变为「待隔离环境」，不构成本批次代码缺陷。
