@@ -142,6 +142,7 @@ export function buildSettingsCards(React: ReactApi, util: UtilApi, sessionsSvc: 
       React.createElement('div', { className: 'dsh-recall-ex-note' }, 'gitignore 语法，一行一条，支持 # 注释；命中排除的文件与目录不进入快照，也不会被回退触碰。'),
       React.createElement('textarea', {
         className: 'dsh-recall-ex-area',
+        'aria-label': '快照排除模式列表（gitignore 语法，一行一条）',
         value: draft,
         spellCheck: false,
         onChange: (e: import('react').ChangeEvent<HTMLTextAreaElement>) => setDraft(e.target.value)
@@ -151,6 +152,7 @@ export function buildSettingsCards(React: ReactApi, util: UtilApi, sessionsSvc: 
           className: 'dsh-recall-ex-input',
           value: quick,
           placeholder: '输入路径或模式，回车快速添加',
+          'aria-label': '快速添加排除模式',
           onChange: (e: import('react').ChangeEvent<HTMLInputElement>) => setQuick(e.target.value),
           onKeyDown: (e: import('react').KeyboardEvent) => { if (e.key === 'Enter') { e.preventDefault(); addQuick() } }
         }),
@@ -164,7 +166,7 @@ export function buildSettingsCards(React: ReactApi, util: UtilApi, sessionsSvc: 
         }, s))
       ),
       React.createElement('div', { className: 'dsh-recall-panel-actions' },
-        state.message ? React.createElement('span', { className: 'dsh-recall-ex-status' + (state.error ? ' dsh-recall-ex-status-error' : ' dsh-recall-ex-status-success') }, state.message) : null,
+        state.message ? React.createElement('span', { role: 'status', 'aria-live': 'polite', className: 'dsh-recall-ex-status' + (state.error ? ' dsh-recall-ex-status-error' : ' dsh-recall-ex-status-success') }, (state.error ? '错误：' : '') + state.message) : null,
         React.createElement('button', { type: 'button', className: 'dsh-recall-btn', disabled: !dirty || state.busy, onClick: discard }, '放弃修改'),
         React.createElement('button', { type: 'button', className: 'dsh-recall-btn', disabled: !dirty || state.busy, onClick: save }, '保存')
       )
@@ -398,8 +400,13 @@ export function buildSettingsCards(React: ReactApi, util: UtilApi, sessionsSvc: 
       const switchable = Boolean(s.sessionId && listById && listById[s.sessionId])
       return React.createElement('div', { className: 'dsh-recall-tree-node', key: key },
         React.createElement('div', { className: 'dsh-recall-tree-row' },
-          React.createElement('span', {
+          // V2：折叠钮 span→button——Tab/Enter/Space 可达，读屏经 aria-expanded
+          // 与 aria-label 播报展开语义与节点名；CSS 已做 button 重置防视觉回归。
+          React.createElement('button', {
+            type: 'button',
             className: 'dsh-recall-tree-toggle',
+            'aria-expanded': open,
+            'aria-label': (open ? '收起' : '展开') + '：' + label,
             onClick: () => toggle(key)
           }, open ? '▾' : '▸'),
           React.createElement('span', { className: 'dsh-recall-tree-label', title: s.sessionId || '' },
@@ -432,8 +439,12 @@ export function buildSettingsCards(React: ReactApi, util: UtilApi, sessionsSvc: 
       const snapCount = ws.sessions.reduce((n, s) => n + s.items.length, 0)
       return React.createElement('div', { className: 'dsh-recall-tree-node', key: key },
         React.createElement('div', { className: 'dsh-recall-tree-row' },
-          React.createElement('span', {
+          // V2：工作区折叠钮同 renderSession——span→button 键盘化，aria 语义并列播报
+          React.createElement('button', {
+            type: 'button',
             className: 'dsh-recall-tree-toggle',
+            'aria-expanded': open,
+            'aria-label': (open ? '收起' : '展开') + '：' + ws.name,
             onClick: () => toggle(key)
           }, open ? '▾' : '▸'),
           React.createElement('span', { className: 'dsh-recall-tree-label', title: ws.root || '' },
@@ -482,6 +493,7 @@ export function buildSettingsCards(React: ReactApi, util: UtilApi, sessionsSvc: 
       React.createElement('input', {
         className: 'dsh-recall-ex-input',
         placeholder: '搜索工作区 / 会话标题 / 消息内容 / ID',
+        'aria-label': '搜索快照',
         value: query,
         spellCheck: false,
         onChange: (e) => setQuery(e.target.value),
@@ -495,7 +507,7 @@ export function buildSettingsCards(React: ReactApi, util: UtilApi, sessionsSvc: 
         : null,
       renderDeleteAllConfirm(),
       React.createElement('div', { className: 'dsh-recall-panel-actions' },
-        state.message ? React.createElement('span', { className: 'dsh-recall-ex-status' + (state.error ? ' dsh-recall-ex-status-error' : ' dsh-recall-ex-status-success') }, state.message) : null,
+        state.message ? React.createElement('span', { role: 'status', 'aria-live': 'polite', className: 'dsh-recall-ex-status' + (state.error ? ' dsh-recall-ex-status-error' : ' dsh-recall-ex-status-success') }, (state.error ? '错误：' : '') + state.message) : null,
         limit < total ? React.createElement('button', {
           type: 'button',
           className: 'dsh-recall-btn',
@@ -671,8 +683,10 @@ export function buildSettingsCards(React: ReactApi, util: UtilApi, sessionsSvc: 
       const changed = Boolean(draft && baseline && draft[key] !== baseline[key])
       return React.createElement('div', { className: 'dsh-recall-cfg-row', key: key },
         React.createElement('div', { className: 'dsh-recall-cfg-line' },
-          React.createElement('label', { className: 'dsh-recall-cfg-label' }, label),
+          // V2：数字输入 label/input 经 htmlFor-id 关联（与 checkbox 行既有模式一致），读屏可播报字段名与值
+          React.createElement('label', { className: 'dsh-recall-cfg-label', htmlFor: 'dsh-recall-cfg-' + key }, label),
           React.createElement('input', {
+            id: 'dsh-recall-cfg-' + key,
             className: 'dsh-recall-cfg-input',
             type: 'number',
             value: draft ? draft[key] : '',
@@ -777,7 +791,7 @@ export function buildSettingsCards(React: ReactApi, util: UtilApi, sessionsSvc: 
         React.createElement('div', { className: 'dsh-recall-cfg-hint' }, '内置规则，每个工作区共享，建议保持默认；gitignore 语法每行一条，优先级低于「排除配置」里的 exclude.txt（S3-2 折叠）')
       ) : null,
       React.createElement('div', { className: 'dsh-recall-panel-actions' },
-        state.message ? React.createElement('span', { className: 'dsh-recall-ex-status' + (state.error ? ' dsh-recall-ex-status-error' : ' dsh-recall-ex-status-success') }, state.message) : null,
+        state.message ? React.createElement('span', { role: 'status', 'aria-live': 'polite', className: 'dsh-recall-ex-status' + (state.error ? ' dsh-recall-ex-status-error' : ' dsh-recall-ex-status-success') }, (state.error ? '错误：' : '') + state.message) : null,
         React.createElement('button', { type: 'button', className: 'dsh-recall-btn', disabled: state.busy || !writable, onClick: () => setDraft(baseline ? Object.assign({}, baseline) : null) }, '放弃修改'),
         React.createElement('button', {
           type: 'button',

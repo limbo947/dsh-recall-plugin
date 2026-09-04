@@ -34,6 +34,10 @@ export const CSS = [
   '.dsh-recall-btn:hover{color:var(--dsw-alias-label-primary)}',
   '.dsh-recall-btn-danger{background:var(--dsw-alias-state-error-primary);color:var(--dsw-alias-bg-layer-3)}',
   '.dsh-recall-btn-danger:hover{color:var(--dsw-alias-bg-layer-3);filter:var(--dsh-recall-btn-danger-hover)}',
+  // 焦点环（V2-5）：focus-visible 令牌不存在（核验见计划文档），按官方按钮
+  // 惯例用 border-l3 2px 环 + outline:none——border-l2 加深一档即 border-l3，
+  // 与官方 settings 卡片按钮 focus 写法逐字一致。
+  '.dsh-recall-btn:focus-visible,.dsh-recall-ex-chip:focus-visible,.dsh-recall-tree-toggle:focus-visible,.dsh-recall-cardbtn:focus-visible,.dsh-recall-ex-input:focus-visible,.dsh-recall-cfg-input:focus-visible,.dsh-recall-ex-area:focus-visible,.dsh-recall-cfg-area:focus-visible{box-shadow:0 0 0 2px var(--dsw-alias-border-l3);outline:none}',
   '.dsh-recall-toast{position:fixed;top:18px;left:50%;transform:translateX(-50%);z-index:10000;max-width:min(560px,86vw);box-sizing:border-box;background:var(--dsw-alias-bg-base);color:var(--dsw-alias-label-primary);border:1px solid var(--dsw-alias-border-l2);border-radius:12px;padding:10px 16px;font-size:13px;line-height:20px;box-shadow:0 8px 28px rgba(0,0,0,.22);display:flex;align-items:baseline;gap:8px;opacity:0;transition:opacity .25s ease;pointer-events:auto}',
   '.dsh-recall-toast.dsh-recall-toast-in{opacity:1}',
   '.dsh-recall-toast-tag{flex:none;font-weight:600;color:var(--dsw-alias-state-error-primary)}',
@@ -52,7 +56,9 @@ export const CSS = [
   '.dsh-recall-tree-node{display:flex;flex-direction:column;gap:1px}',
   '.dsh-recall-tree-row{display:flex;gap:6px;align-items:center;min-width:0;padding:2px 4px;border-radius:6px;cursor:default}',
   '.dsh-recall-tree-row:hover{background:var(--dsw-alias-interactive-bg-hover)}',
-  '.dsh-recall-tree-toggle{flex:none;width:18px;height:18px;display:inline-flex;align-items:center;justify-content:center;color:var(--dsw-alias-label-tertiary);cursor:pointer;border-radius:4px;font-size:11px;line-height:18px;user-select:none}',
+  // V2 树折叠钮 span→button 的 UA 默认样式重置：button 自带 appearance/背景/边框/
+  // 内边距，与 span 形态差异在此抹平，保证纯键盘可达不引入视觉回归。
+  '.dsh-recall-tree-toggle{appearance:none;background:0 0;border:0;padding:0;font:inherit;flex:none;width:18px;height:18px;display:inline-flex;align-items:center;justify-content:center;color:var(--dsw-alias-label-tertiary);cursor:pointer;border-radius:4px;font-size:11px;line-height:18px;user-select:none}',
   '.dsh-recall-tree-toggle:hover{color:var(--dsw-alias-label-primary);background:var(--dsw-alias-interactive-bg-hover)}',
   '.dsh-recall-tree-toggle-placeholder{flex:none;width:18px;height:18px}',
   '.dsh-recall-tree-label{flex:1;min-width:0;display:flex;gap:8px;align-items:baseline;font-size:12px;line-height:20px;overflow:hidden}',

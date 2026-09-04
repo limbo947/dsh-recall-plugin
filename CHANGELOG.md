@@ -6,6 +6,8 @@
 
 ### 修复
 
+- **设置页可访问性补强（V2）**：快照树折叠钮从纯视觉 `<span>` 升为 `<button>`（Tab/Enter/Space 可达），配 `aria-expanded`/`aria-label`；数字输入 label/input 按 id 关联；三处状态消息加 `role="status"` + `aria-live="polite"`、错误文案补「错误：」文字前缀；三个无标签控件（快照搜索/排除编辑/快速添加）补 `aria-label`；全按钮与输入框补 `:focus-visible` 焦点环（官方 border-l3 惯例）。键盘完全不可达的树折叠是本次最重的功能性缺陷，纯增量修复。
+
 - **设置页语义色修复（V1）**：ExcludeCard「保存」按钮去掉危险红样式、与配置表单保存按钮统一；快照文件清单「已修改」badge 从错误红改为 warning（amber）色系——修改不是错误；配置表单三类状态标签分化（「已修改」warn 底色 /「已覆盖」中性灰 /「环境变量锁定」中性灰 + 左边框）；`btn-danger` 前景色硬编码 `#fff` 换为官方实证的主题感知令牌 `--dsw-alias-bg-layer-3`，hover 亮度集中为 css.ts 顶部语义变量，消灭令牌体系外散落补丁。纯样式改动，无行为变化。
 
 ### 变更

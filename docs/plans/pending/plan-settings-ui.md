@@ -75,6 +75,8 @@
 
 ## V2 可访问性补强
 
+> 状态：✅ 已实施（2026-09-04，读屏走查待冒烟）
+
 ### 目标
 
 键盘与读屏用户可完整操作设置页——现状树折叠钮是 `<span onClick>`，键盘完全无法触达，是本计划最重的功能性缺陷。
@@ -106,6 +108,17 @@ settings-cards.ts（树渲染两处、numRow、状态 span 三处、输入控件
 ### 风险与回退
 
 - span → button 引入 UA 默认样式差异——CSS 重置兜底；纯增量无行为变化，回退 = git revert。
+
+### 实施记录（2026-09-04）
+
+- 任务 1 树折叠钮键盘化：两处（会话 / 工作区）span→`<button type="button">`，css.ts `.dsh-recall-tree-toggle` 补 `appearance:none;background:0 0;border:0;padding:0;font:inherit` 重置；`aria-expanded` + `aria-label`（「展开/收起：节点名」）。树容器 `role="tree"`/`treeitem` 属计划标注的可选项，未做（SectionToggle 头部箭头保持 span 形态不受影响）。
+- 任务 2 numRow label `htmlFor` + input `id="dsh-recall-cfg-"+key`，与 checkbox 行既有模式一致。
+- 任务 3 三处状态 span（ExcludeCard/ManageCard/ConfigForm）加 `role="status"` + `aria-live="polite"`，错误文案统一加「错误：」文字前缀——不依赖红色传达。
+- 任务 4 三个无标签控件补 `aria-label`：快照搜索框 / exclude textarea / 快速添加输入框。
+- 任务 5 焦点环：focus-visible 令牌核验不存在 → 走降级 `box-shadow:0 0 0 2px var(--dsw-alias-border-l3);outline:none`（官方 settings 卡片按钮 focus 写法逐字一致），覆盖全部按钮/输入框/textarea。
+- 任务 6 回归确认：SectionToggle 与卡片头的 `aria-expanded` 现状良好。
+- 验收：typecheck + build + 单测（296 例）全绿。键盘走查（Tab 可达/Enter-Space 折叠/焦点环）与读屏播报列入发版前冒烟（读屏标注「待冒烟」）。
+- 备注：V1 批次两处遗漏（badge-modified / btn-danger 前景）已在开工时核对提交内容定位为编辑工具同批多写盘丢失，重建为独立修复提交（0b03646）并重跑三连全绿。
 
 ***
 
