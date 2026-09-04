@@ -25,7 +25,7 @@ export function buildSettingsCards(React: ReactApi, util: UtilApi, sessionsSvc: 
       onClick: props.onToggle,
     },
       React.createElement('span', { className: 'dsh-recall-tree-toggle' }, props.open ? '▾' : '▸'),
-      React.createElement('span', { style: { fontWeight: 600, fontSize: '14px', lineHeight: '22px' } }, props.title),
+      React.createElement('span', { className: 'dsh-recall-ex-title' }, props.title),
       props.meta ? React.createElement('span', { className: 'dsh-recall-tree-meta' }, props.meta) : null
     )
   }

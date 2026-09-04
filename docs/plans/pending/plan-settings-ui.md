@@ -295,6 +295,14 @@ css.ts（字号 / 行高 / 变量声明）；settings-cards.ts（L805 内联样�
 
 - 低；纯样式，回退 = git revert。
 
+### 实施记录（2026-09-04）
+
+- 任务 1 字阶收敛：`.dsh-recall-tree-meta` / `.dsh-recall-cfg-tag` / `.dsh-recall-badge` / `.dsh-recall-tree-toggle` 的 11px 全部升 12px（4 处，replace_all），全文 11px 清零；字阶现为 15（卡片名）/14（分区与卡片标题）/13（正文与表单）/12（辅助 meta 与 hint）。
+- 任务 2 内联样式收敛：SectionToggle 标题 `style={{fontWeight:600,fontSize:'14px',lineHeight:'22px'}}` → 复用 `.dsh-recall-ex-title` class（同规格，按计划「视情况合并」处理）；settings-cards.ts 内联 fontSize/fontWeight 清零。
+- 任务 3 行高全量无单位化：`line-height:24/22/20/18px` → `1.5`、`16px` → `1.4`（`--dsh-recall-cfg-tag` 唯一 16px 档，按 1.4 基准），28 处统一为无单位写法，px 行高清零——换算按「以 1.4/1.5 为基准」执行，个别原 1.6–1.7 比例（如 time/file 行）相应收紧至 1.5，属计划认可的微调（视觉对照列入冒烟）。
+- 任务 4 间距刻度变量：`:root` 加 `--dsh-recall-space-1/2/3`（4/8/12px），存量不强制收敛（计划原文），V8/V9 新增样式将引用变量。
+- 验收：typecheck + build + 单测 296 例全绿；css.ts 全文 0 命中 11px 与 px 行高、settings-cards.ts 0 内联字号权重。字级微调折行变化由树行 ellipsis 兜底，视觉回归对照列入发版前冒烟。
+
 ***
 
 ## V8 响应式补全
