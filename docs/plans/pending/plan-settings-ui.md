@@ -69,6 +69,7 @@
 - 保存按钮去 danger（ExcludeCard L169）与 `badge-modified` 改 warn 色系已一并落地；badge 影响面含撤回确认面板文件清单（同 class）。
 
 - 验收：typecheck + build + 单测（296 例）全绿；双主题视觉对照与撤回确认面板核对列入发版前冒烟。`btn-danger` 的 `filter` 集中在 css.ts 顶部单点声明。
+- **补注（2026-09-04，V2 开工时核对提交内容发现）**：本项 `badge-modified` 改 warn 与 `btn-danger` 前景换 `bg-layer-3` 两处改动在首次提交中丢失（编辑工具同批多写盘只保留末项），已重建为独立修复提交（commit 见下）；V1 提交（487500b）实质包含：保存按钮去 danger、cfg-tag 三色分化、`:root` hover 变量声明。
 
 ***
 

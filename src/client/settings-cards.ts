@@ -166,7 +166,7 @@ export function buildSettingsCards(React: ReactApi, util: UtilApi, sessionsSvc: 
       React.createElement('div', { className: 'dsh-recall-panel-actions' },
         state.message ? React.createElement('span', { className: 'dsh-recall-ex-status' + (state.error ? ' dsh-recall-ex-status-error' : ' dsh-recall-ex-status-success') }, state.message) : null,
         React.createElement('button', { type: 'button', className: 'dsh-recall-btn', disabled: !dirty || state.busy, onClick: discard }, '放弃修改'),
-        React.createElement('button', { type: 'button', className: 'dsh-recall-btn dsh-recall-btn-danger', disabled: !dirty || state.busy, onClick: save }, '保存')
+        React.createElement('button', { type: 'button', className: 'dsh-recall-btn', disabled: !dirty || state.busy, onClick: save }, '保存')
       )
     )
   }
