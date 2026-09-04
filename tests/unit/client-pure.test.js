@@ -11,7 +11,7 @@
 import { describe, it, expect } from 'vitest'
 import { buildTree, clockText, sizeText, bytesToMb } from '../../src/client/util.js'
 import { KIND_INFO, summaryText } from '../../src/client/recall-node.js'
-import { groupByLineage } from '../../src/client/settings-cards.js'
+import { groupByLineage } from '../../src/client/snapshot-manager.js'
 import { nextShadowPriority } from '../../src/client/app.js'
 
 describe('client 纯逻辑', () => {

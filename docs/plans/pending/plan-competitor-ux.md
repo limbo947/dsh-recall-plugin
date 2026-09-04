@@ -150,6 +150,17 @@
 
 - 纯移动风险低；唯一注意 esbuild 打包入口不变（[src/client/app.ts](../../../src/client/app.ts) 引用路径更新）。
 
+### 实施记录（2026-09-04）
+
+- 按域拆为四文件（纯移动，零行为变化）：
+  - `src/client/settings-cards.ts`（861 → 74 行）：装配层 + SectionToggle 共享原子 + RecallSettingsCard 外壳；
+  - `src/client/snapshot-manager.ts`（444 行）：快照树管理整卡 + `groupByLineage`/`FamilyInfo`（F1 纯函数随域归属本文件）；
+  - `src/client/config-card.ts`（270 行）：插件配置表单（9 字段 + 恢复默认）；SectionToggle 经工厂参数注入避免反向依赖装配层成环（`SectionToggleProps` 结构类型契约）；
+  - `src/client/exclude-card.ts`（144 行）：exclude 编辑卡片 + 分区拉取。
+- 引用路径更新两处：`app.ts` 的 `buildSettingsCards` 导入面不变（装配层仍是 settings-cards.ts）；`tests/unit/client-pure.test.js` 的 `groupByLineage` 导入改指 snapshot-manager.js。
+- 验收：typecheck + build + 单测 296 例全绿；产物新鲜度由 CI 门禁兜底。三卡片行为零变化（纯移动，冒烟对照并入后续 UI 批次冒烟）。
+- 后续注：本文件拆分后各仓 < 500 行，为 U1（draftBackup）与 U5（previewTtlMinutes）表单项预留了充足空间。
+
 ---
 
 ## U5 preview TTL 过期保护
