@@ -76,3 +76,29 @@
 - **发版后快照清理事件（01:56）**：除「有活跃会话的工作区」外的快照店发生 tag purge + index 清空（sweep 签名：safety tag 保留、消息快照清光）。代码取证：设置页「立即 gc」→ runGcAll → sweepDeletedSessions 无条件执行（runGc 消息路径的 50 拍/24h 门控与 gc.stamp 跨重启加载均正常，runGcAll 无门控），对「不在 live 注册表且不在 listSessions」的会话逐一 purge。**待用户确认**：若测试会话是用户在 UI 里删的，purge 属「会话删除联动清 tag」设计行为（会话日志已从磁盘消失，与该假设吻合）；若用户未删过会话，则为 2.2.0 误清 bug（listSessions 冷态漏报），需 2.2.1 热修（sweep 对候选补 readSession 复核）。
 - **恢复**：冒烟测试工作区 33/33、smoke space 1/1 快照从不可达 commit 抢救（commit message 内嵌 messageId），tag 重建 + index 回写（sessionId 置 null，sweep 免疫，树中落「已删除会话」组）+ 全量 bundle 固化于 `~/.dsh/recall-incident-backup-20260830/`（含事件档案 README.md）。pf3 的 2 条测试快照在恢复窗口内被后续 gc 剪除（不可恢复，可弃）；issue12 的 2 条为 PF-6 验证时有意删除，未恢复。
 - **教训**：①联动清理的破坏半径 = 「立即 gc」按钮一键触达全部 store 的已删会话快照，且 purge 前无二次确认——UX 层面值得加确认或让 runGcAll 的 sweep 跳过最近 N 分钟仍被索引引用的会话；②影子库 commit message 内嵌 messageId 是最后的数据恢复通道（tag 名丢失后仍可从 `git fsck --unreachable` 完整重建映射），这个设计救了 34 条快照。
+
+## 2026-09-04 设置页 UI 批次冒烟（第八节）
+
+- **环境**：Windows 10 ｜ dsh 0.1.2-rc.1 ｜ dsh-recall-plugin **link 模式**（profile 依赖临时改 `link:D:/workspace/dsh-plugin/dsh-recall-plugin` + pnpm install --no-frozen-lockfile；冒烟后已还原 npm 模式 `^2.3.1`，切换前备份 `package.json.bak-20260904`）｜ dsh web 127.0.0.1:12789（`--no-open --port 12789` + 一次性 token URL，browser-trust 围栏须带 token）｜ 测试数据：既有工作区「test」7 会话 9 快照（含 v1/v2/v3 版本家族，实数据覆盖树/确认条/操作区路径）
+- **执行方式**：浏览器自动化（browser_use 子代理两轮）+ DOM/CSS 计算样式求值 + 注入等价 `@media(max-width:480px)` 样式模拟窄屏（工具无 CDP 视口仿真、`window.resizeTo` 被主窗口拦截）；功能回归走真实改-存-回读链路；浏览器控制台零报错
+- **结果**：V1–V9 全部核验通过（含一轮「疑似不通过」经复核澄清为设计差异）；浅色/深色双主题对照通过；剩余 3 项人工复核（真实窄视口终验 / 真实键盘 Enter/Space / 读屏播报）
+
+**逐项结论**：
+
+1. **V1 语义色 — 通过**：改为 config-form 保存按钮普通样式、badge-modified 为 warn tert 底 + 浅/深主题色值随令牌正确翻转。
+2. **V2 键盘结构 — 通过（真实键触发待人工）**：树折叠钮为原生 `<button class="dsh-recall-tree-toggle">` + `aria-expanded`/`aria-label`；Tab 可聚焦（activeElement 命中）、点击可折叠展开；`:focus-visible` 焦点环规则已注入。自动化合成的 Enter/Space 无 isTrusted 无法触发原生激活，真实键盘需人工复核一次。
+3. **V3 禁用态 — 通过（澄清）**：排除配置未修改保存按钮 `disabled=true` + `opacity:.5` + hover 无色变（css 规则级证据）；配置表单保存按钮未修改可点、点击提示「没有修改」——**既定设计差异**（ConfigForm 未用 dirty 禁用，与 ExcludeCard 不一致，V3 计划未要求改），代理一度误判「不通过」，复核确认非缺陷。
+4. **V4 Grid — 通过**：`.dsh-recall-cfg-row` computed `display:grid`、双列 52px/462px，label/控件分列对齐，卡片与页面均无横向溢出。
+5. **V5 顺序 — 通过**：操作区按钮实测 刷新 → 立即 gc → 全部删除（danger 末位、在立即 gc 之后）。
+6. **V6 健康/错误 — 通过**：`dsh-recall-health-pill-ok`「git 可用」绿色实测 rgb(34,197,94)；「最近错误」区当前无错误不渲染（有则显示，规则与逻辑均在）。
+7. **V7 排版 — 通过**：无溢出、树行 ellipsis 正常，字级微调在双主题视觉对照内无回归。
+8. **V8 窄屏 — 通过（模拟等价，真实视口待人工）**：注入等价 480px 样式后表单单列（522px）、快速添加输入 `flex:1 1 100%` 独占一行、无横向溢出；运行时改真实视口受工具限制。
+9. **V9 确认条 — 通过**：点叶子「删除」原位出确认条，确认=`dsh-recall-ex-chip-danger`、取消=普通 chip；点取消关闭且未误删（计数归 0）。
+
+**发现（按严重度）**：
+
+1. **[观察·不阻塞] 浏览器自动化能力边界**：无 CDP 设备仿真/真实视口调整，合成键盘事件无 isTrusted——窄屏 400px 终验、Enter/Space 真实键触发、读屏（Narrator/NVDA）播报均留人工复核（环境受限，非产品缺陷）。
+2. **[观察（设计差异，非缺陷）] ConfigForm 保存按钮未做 dirty 禁用**：与 ExcludeCard 的模式不一致（其 dirty 判定 → disabled）；计划 V3-1 只要求 disabled 态 css 可识别。如未来统一，可给 ConfigForm 补 dirty 判定（复用 ExcludeCard 现成模式），超本期范围。
+3. **[过程备忘] 浏览器自动化工具无法直接点击被透明覆盖层拦截的按钮**与上轮（第八节外）一致：全程用页面内 evaluate 触发 click；dsh settings 页「通用」外观切浅色/深色可用（本轮浅色对照已还原深色）。
+
+**发版判定**：设置页 UI 批次（V1–V9）冒烟基本通过（自动化全覆盖 + 双主题 + 功能回归零报错）；剩余 3 项人工复核（真实窄视口、真实键盘 Enter/Space、读屏播报）不阻塞代码质量，随发版前人工冒烟补齐。计划文档保持「已实施（待冒烟）」留 pending/，人工项完成后移入 completed/（按 docs 生命周期第 2 条同步三处链接）。
