@@ -2,6 +2,12 @@
 
 本文件格式遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循语义化版本。
 
+## [2.3.4] - 2026-09-05
+
+### 新增
+
+- **DSH STORE 兼容矩阵声明**：`package.json` 的 `dsh.compatibility.dshReleases` 对 DSH `0.1.2-alpha.1`～`0.1.2-alpha.5`、`0.1.2-rc.1`、`0.1.3-alpha.1` 全部逐版本声明 `compatible`——修复 DSH STORE 自动检查（issue #517）的「更新暂缓 / 兼容性暂时下架」确定性原因（此前对官方最新三个 DSH 版本零精确声明，范围声明不被视为可安装证据）。纯 manifest 元数据变更，无运行行为变化。
+
 ## [2.3.3] - 2026-09-05
 
 ### 修复
