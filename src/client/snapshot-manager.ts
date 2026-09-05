@@ -378,7 +378,9 @@ export function buildSnapshotManager(React: ReactApi, util: UtilApi, sessionsSvc
     }
 
     return React.createElement('div', { className: 'dsh-recall-ex-card' },
-      React.createElement('div', { className: 'dsh-recall-ex-title' }, '快照管理'),
+      // 不再渲染「快照管理」内标题：折叠头（SectionToggle）已承担分区标题
+      // 角色，展开后再出现同名大标题是纯重复（实测观感噪音）；计数 note 紧跟
+      // 折叠头，信息层级 = 折叠头（标题）→ 计数/健康（摘要）→ 搜索 → 树。
       React.createElement('div', { className: 'dsh-recall-ex-note' },
         usage === null
           ? countText + '。'

@@ -151,7 +151,7 @@ describe('buildReport', () => {
     expect(r.ok).toBe(false)
     expect(r.exitCode).toBe(1)
     expect(r.lines.join('\n')).toContain('镜像漂移')
-    expect(r.lines.join('\n')).toContain('重拉 reference/ 镜像')
+    expect(r.lines.join('\n')).toContain('重拉 docs/reference/ 镜像')
   })
 
   it('peer 越界：npm 最新 dsh 超出 peer 范围，输出扩范围提醒并 exit 1', () => {

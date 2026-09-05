@@ -322,7 +322,7 @@ web/deepseek-search-llm-request
 ## 七、dsh 升级核查指引
 
 1. **契约对比**（一次升级只做一遍）：**类型源 diff 核对法**——插件对官方 API 的依赖面已契约化为 `src/types/dsh-contract.ts`（Host 依赖面，含两个 ambient 模块）与 `src/types/client-contract.ts`（Client slot/`__ModuleLoader__`/服务），升级时以这两文件为**单一类型源**，逐节对照新旧 tag 的官方 `.d.ts`/产物 diff，类型与官方不一致处即升级断点；`conversation.chat.node` 声明位置可能在包重组后迁移（本次 `ui-conversation` → `ui-chat`），先 `git/trees` 搜 slot 名再 diff。compare API 截断 300 文件不可用，用 `contents/trees` API 逐文件拉。
-2. **机器化断言**：`npm run test:probe`（官方字段假设）→ `npm run verify:host`（装配门禁）→ `npm run check:dsh`（版本巡检；镜像漂移提醒后重拉 `reference/` 并更新其头部「归档 dsh 版本」）。
+2. **机器化断言**：`npm run test:probe`（官方字段假设）→ `npm run verify:host`（装配门禁）→ `npm run check:dsh`（版本巡检；镜像漂移提醒后重拉 `docs/reference/` 并更新其头部「归档 dsh 版本」）。
 3. **实弹冒烟**：中文路径工作区发消息 → 撤回（清单/文件恢复/对话回退/标题不变）→ 设置页快照管理。新 UI 机制（如 0.1.2 的 turn-process 折叠、字号调节）重点确认插件 UI 可见性与视觉协调。
 4. **台账**：核查结论对照 `docs/compat-audit.md` I1-I29 定点更新，发现失效项补「失效症状 + 复查动作」。
 

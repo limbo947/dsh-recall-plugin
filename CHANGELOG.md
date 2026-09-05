@@ -2,6 +2,24 @@
 
 本文件格式遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循语义化版本。
 
+## [2.3.3] - 2026-09-05
+
+### 修复
+
+- **设置页风格对齐 DSH 官方插件设置卡**：以本机官方 `dsh-client-ui-settings-plugins` 构建产物为事实源，对卡片描边与圆角、次级/主/危险按钮、输入框、状态徽章、布尔开关（checkbox → role=switch 滑钮）、焦点环、折叠头箭头动效逐部位对齐官方配方，说明文字统一辅助色；「高级：基础排除表」更名为「基础排除表」。全部配色走官方 `--dsw-alias-*` 主题令牌（逐一核验），纯展示层调整，无行为变化。配方沉淀见 `docs/design-tokens.md`。
+
+- **设置页三个折叠区展开态去冗余**：① 删除与折叠头重复的内标题（「快照管理」卡内大标题、「快照排除项」卡内标题）——折叠头已承担分区标题角色，展开后再出现同名标题是纯噪音；② 「基础排除表」展开后 textarea 与说明文字改为通栏——此前只占共享 grid 第二列，左侧长标签列形成竖直死区、编辑框被挤窄；label 保持原位（htmlFor 关联是可访问性契约）；③ 排除配置的存储路径从长句中抽出为独立等宽小字行（break-all 整齐折行），说明正文不再被 Windows 长路径撑出断裂换行，多文件场景（降级工作区）也靠路径行区分。纯展示层调整，无行为变化。
+
+- **设置页配置表单排版再打磨（六点位）**：① 数字输入框从「撑满整行」改为定宽 120px + 数值右对齐，单位（条/小时/MB/天）与状态标签（已修改/已覆盖/环境变量锁定）统一挂在输入框右侧同基线——此前输入框宽度随行内标签有无伸缩、各行右缘参差；② 主标签升为正文字色（label-primary），说明文字维持 12px tertiary 固定在控件下方第二行，主辅层级拉开；③ 五个数字字段补齐单位后缀（此前仅 MB）；④ 「快照行为 / 自动治理」组间加分隔线与加倍留白，组界不再只靠小标题；组内行距统一为 12px；⑤ 「保存」升主色实心按钮（配色经官方主题产物核验：`button-primary-fill` / `label-primary-foreground` / `button-primary-hover`），「放弃修改 / 恢复默认」维持次级灰底；⑥ 三个折叠头（基础排除表 / 排除配置 / 快照管理）的箭头字形盒内改左对齐，与上方表单标签共享同一左缘。纯样式与文案层级调整，无行为变化。
+
+- **设置页数字输入框隐藏原生加减微调按钮**：「自动治理」五个数字输入框为 34px 定宽，原生 spinner（上下箭头）跨引擎渲染不一（Chromium 有 / Firefox 无）、挤占右侧数字区，与「数值右对齐」的纵向扫描相冲——隐藏原生 spinner（`-webkit-appearance:none` + `appearance:textfield`，scope 到 `.dsh-recall-cfg-input` 不外溢），键盘 ↑↓ 微调与直接输入能力保留。纯样式调整。
+
+### 变更
+
+- **新增 `docs/design-tokens.md` 设计令牌与组件配方参考**：把本次对齐所核验的官方事实源（`dsh-client-ui-theme` 令牌定义、`dsh-client-ui-settings-plugins` 组件配方）沉淀为长期规范文档——令牌命名空间说明、颜色/排版速查（含本插件使用处映射）、八类官方组件配方摘录（卡片/按钮组/表单字段/badge/switch/分组折叠/分隔线规格/阴影）、本插件落地约定与 dsh 升级后的重抽比对流程。后续改 client UI 先查此文档，避免凭印象写颜色与字阶。
+
+- **`reference/` 官方文档镜像整合进 `docs/`**：目录 `reference/` → `docs/reference/`（.gitignore 同步改 `docs/reference/`，镜像仍不入库），官方文档镜像与项目文档收敛到同一目录；同步更新 AGENTS.md 合规清单与漂移控制节、`scripts/check-dsh-version.mjs`（镜像读取路径改为 `docs/reference/README.md`）、`scripts/check-upgrade.mjs` 提示文案、package-layout 单测禁入清单（`docs/` 已覆盖镜像）、`docs/dsh-contract.md` 升级指引、compat-audit 台账 I6 复查动作的镜像路径与 docs/README.md 目录索引；compat-audit 头部与各计划文档中的历史核验记录按当时原文保留。
+
 ## [2.3.2] - 2026-09-04
 
 ### 修复

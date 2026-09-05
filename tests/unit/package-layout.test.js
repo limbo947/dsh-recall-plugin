@@ -3,7 +3,7 @@
  *
  * npm pack --dry-run --json 输出包里实际会安装的文件，据此钉住 files 白名单：
  * - 运行时文件必须进包（lib/、cordis.patch.yml、README、LICENSE、package.json）；
- * - 仓库开发文件绝不进包（AGENTS.md / docs/ / tests/ / reference/ / scripts/——
+ * - 仓库开发文件绝不进包（AGENTS.md / docs/（含 docs/reference 镜像）/ tests/ / scripts/——
  *   AGENTS.md 已在 .gitignore 中确认不进 npm，这里从 pack 输出侧再兜一道；
  *   scripts/ 是 P2-5 起的发布前巡检脚本，同样不是运行时产物）。
  * 借鉴 turn-rewind 的 package-layout 思路，用 node:child_process 跑产物断言，
@@ -56,8 +56,8 @@ describe('npm 发布包内容', () => {
     for (const rel of required) expect(files, 'pack 缺少 ' + rel).toContain(rel)
   })
 
-  it('仓库开发文件不进包（AGENTS.md / docs / tests / reference / scripts）', () => {
-    for (const disallowed of ['AGENTS.md', 'docs/', 'tests/', 'reference/', 'scripts/']) {
+  it('仓库开发文件不进包（AGENTS.md / docs / tests / scripts）', () => {
+    for (const disallowed of ['AGENTS.md', 'docs/', 'tests/', 'scripts/']) {
       expect(files.some((f) => f.startsWith(disallowed)), 'pack 泄漏 ' + disallowed).toBe(false)
     }
   })

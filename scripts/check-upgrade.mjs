@@ -11,7 +11,7 @@
  *   3. verify:host — 装配门禁（inject 声明/端点注册/Config schema/settings 接入）。
  * 任一层失败即 exit 1，并在输出中提示按 compat-audit.md「复查动作」定点复查；
  * 全绿则提示在 compat-audit.md 头部追加核验记录（日期/版本/结果/漂移结论），
- * 并同步 reference/README.md 归档版本字段与 docs/dsh-contract.md「对应版本」。
+ * 并同步 docs/reference/README.md 归档版本字段与 docs/dsh-contract.md「对应版本」。
  *
  * 定位：本地开发门禁，不进 CI（与 test:probe/verify:host 同语义——无 dsh 的
  * 环境跑 check:dsh 与 probe 仍可整体通过/跳过，verify:host 无 dsh 自动 skip）。
@@ -60,6 +60,6 @@ console.log('\n[check-upgrade] 三层门禁全绿。')
 console.log('下一步（人工，必做）：')
 console.log('1. 在 docs/compat-audit.md 头部追加核验记录：日期 + 归档 dsh 版本 +')
 console.log('   本命令结果 + I1-I31 逐条漂移结论（参考既有 alpha.4 核验段落格式）；')
-console.log('2. 同步 reference/README.md 头部「归档日期 / 归档 dsh 版本」字段，')
+console.log('2. 同步 docs/reference/README.md 头部「归档日期 / 归档 dsh 版本」字段，')
 console.log('   同步 docs/dsh-contract.md 头部「对应版本」字段；')
 console.log('3. 若有官方 API 假设变化，同步 AGENTS.md 合规清单、docs/dsh-contract.md 正文与本文台账。')

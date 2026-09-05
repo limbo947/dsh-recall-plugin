@@ -146,7 +146,7 @@
 - **探针/单测**：`tests/probe/api-surface.test.js`（fork 双包探测 + atSeq/increaseTitle 严格可选负向断言）。
 - **失效症状**：撤回后标题变「xxx 2」且多次撤回递增。
 - **复查动作**：确认 fork 签名未变、increaseTitle 仍可选；本项目仍不传它。另注：
-  reference/09-architecture.md「新行为归属位置」表写
+  docs/reference/09-architecture.md「新行为归属位置」表写
   `ctx.sessions.fork(source, boundary?, childSessionId?)`（2026-09-01 镜像）——
   **是文档的示意写法，不是另一个签名**：alpha.3 实装
   `dsh-api-session-controller/lib/types/client/contract/sessions.d.ts` L94-98 的

@@ -68,12 +68,16 @@ export function buildExcludeCards(React: ReactApi, util: UtilApi): { ExcludeFile
     const suggestions = EXCLUDE_SUGGESTIONS.filter((s) => draftLines.indexOf(s) < 0)
 
     return React.createElement('div', { className: 'dsh-recall-ex-card' },
-      React.createElement('div', { className: 'dsh-recall-ex-title' }, '快照排除项'),
+      // 不渲染「快照排除项」内标题（与折叠头「排除配置（exclude.txt）」语义重复）；
+      // 多文件场景（降级工作区）靠紧随说明的存储路径行区分，标题文本本就相同、
+      // 不承担区分职责。路径从长句中抽出独立等宽行——Windows 长路径内联在句号
+      // 前会撑出断裂换行（实测丑），独立行 break-all 整齐折行。
       React.createElement('div', { className: 'dsh-recall-ex-note' },
         file.home
-          ? '此配置全局共享，对所有工作区的快照生效（存储位置：' + file.path + '）。'
-          : 'home 目录不可写时此工作区降级存储，排除配置独立生效（存储位置：' + file.path + '）。'
+          ? '此配置全局共享，对所有工作区的快照生效。'
+          : 'home 目录不可写时此工作区降级存储，排除配置独立生效。'
       ),
+      React.createElement('div', { className: 'dsh-recall-ex-path' }, '存储位置：' + file.path),
       React.createElement('div', { className: 'dsh-recall-ex-note' }, 'gitignore 语法，一行一条，支持 # 注释；命中排除的文件与目录不进入快照，也不会被回退触碰。'),
       React.createElement('textarea', {
         className: 'dsh-recall-ex-area',
@@ -103,7 +107,9 @@ export function buildExcludeCards(React: ReactApi, util: UtilApi): { ExcludeFile
       React.createElement('div', { className: 'dsh-recall-panel-actions' },
         state.message ? React.createElement('span', { role: 'status', 'aria-live': 'polite', className: 'dsh-recall-ex-status' + (state.error ? ' dsh-recall-ex-status-error' : ' dsh-recall-ex-status-success') }, (state.error ? '错误：' : '') + state.message) : null,
         React.createElement('button', { type: 'button', className: 'dsh-recall-btn', disabled: !dirty || state.busy, onClick: discard }, '放弃修改'),
-        React.createElement('button', { type: 'button', className: 'dsh-recall-btn', disabled: !dirty || state.busy, onClick: save }, '保存')
+        // 保存升主色实心（与配置表单同一约定：每卡唯一主动作，对齐官方插件卡
+        // footer 的 discard 幽灵 + save 实心组合）
+        React.createElement('button', { type: 'button', className: 'dsh-recall-btn dsh-recall-btn-primary', disabled: !dirty || state.busy, onClick: save }, '保存')
       )
     )
   }

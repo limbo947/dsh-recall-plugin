@@ -24,7 +24,9 @@ export function buildSettingsCards(React: ReactApi, util: UtilApi, sessionsSvc: 
       'aria-expanded': props.open,
       onClick: props.onToggle,
     },
-      React.createElement('span', { className: 'dsh-recall-tree-toggle' }, props.open ? '▾' : '▸'),
+      // 箭头恒为 ▸、开合靠旋转（CSS transition .16s）——与官方卡片 chevron 同一
+      // 动效语言；读屏状态仍由 aria-expanded 播报，字形不再承担状态语义
+      React.createElement('span', { className: 'dsh-recall-tree-toggle dsh-recall-section-chevron' + (props.open ? ' dsh-recall-section-chevron-open' : '') }, '▸'),
       React.createElement('span', { className: 'dsh-recall-ex-title' }, props.title),
       props.meta ? React.createElement('span', { className: 'dsh-recall-tree-meta' }, props.meta) : null
     )

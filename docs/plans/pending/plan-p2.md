@@ -95,7 +95,7 @@ npm 发布免本地 NPM_TOKEN，走 GitHub Actions OIDC（dsh-rewind 已实证�
 
 ### 任务分解
 
-1. `tests/unit/package-layout.test.js`：child_process 跑 `npm pack --dry-run --json`，断言 tarball 含 `lib/*.js`（全部现有模块枚举）、`cordis.patch.yml`、`README.md`、`LICENSE`、`package.json`；断言**不含** `AGENTS.md`、`docs/`、`tests/`、`reference/`（防误发，AGENTS.md 明确不进分发包）。
+1. `tests/unit/package-layout.test.js`：child_process 跑 `npm pack --dry-run --json`，断言 tarball 含 `lib/*.js`（全部现有模块枚举）、`cordis.patch.yml`、`README.md`、`LICENSE`、`package.json`；断言**不含** `AGENTS.md`、`docs/`（含 docs/reference 镜像）、`tests/`、`scripts/`（防误发，AGENTS.md 明确不进分发包）。
 2. 该测试进 P1-1 CI 的 `npm test`，无需单独步骤。
 
 ### 验收

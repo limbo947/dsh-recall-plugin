@@ -1,13 +1,13 @@
 /**
  * dsh-recall-plugin — P2-5 dsh 版本巡检脚本（本地/发布前动作，不进 CI）
  *
- * 为什么做：dsh 迭代快，插件 peer 范围与 reference/ 官方文档镜像都可能和
+ * 为什么做：dsh 迭代快，插件 peer 范围与 docs/reference/ 官方文档镜像都可能和
  * 运行环境漂移，且漂移是静默的——升级 dsh 后插件照常加载，直到字段假设
  * 违反才炸（AGENTS.md 合规清单 #8 的教训）。脚本做三层比对，把「按
  * AGENTS.md 漂移控制节重拉镜像、过合规清单」从记忆义务变成可执行哨兵：
  *
- *   1. 本地已装 dsh 版本 vs reference/README.md「归档 dsh 版本」——镜像
- *      漂移哨兵（重拉镜像后该字段必须同步更新，见 reference/README.md）；
+ *   1. 本地已装 dsh 版本 vs docs/reference/README.md「归档 dsh 版本」——镜像
+ *      漂移哨兵（重拉镜像后该字段必须同步更新，见 docs/reference/README.md）；
  *   2. 本地已装 dsh 版本 vs docs/dsh-contract.md「对应版本」——契约文档
  *      漂移哨兵（升级后契约文档未同步即此处报红，逼人按文档第七节重核）；
  *   3. npm 最新 @deepseek-ai/dsh 版本 vs package.json peerDependencies
@@ -222,7 +222,7 @@ export function fetchLatestDshVersion() {
   }
 }
 
-/** 从 reference/README.md 头部文本提取「归档 dsh 版本：x.y.z」；字段缺失
+/** 从 docs/reference/README.md 头部文本提取「归档 dsh 版本：x.y.z」；字段缺失
  * 返回 null。纯函数（单测直接钉）；readMirrorVersion 负责读文件后复用。
  * 为何读 README 而非建独立文件：重拉镜像本来就要更新 README 头（归档日期），
  * 版本字段跟着它走，单一更新点、不会被忘。 */
@@ -232,10 +232,10 @@ export function parseMirrorVersion(text) {
   return m ? m[1] : null
 }
 
-/** 读 reference/README.md 并提取归档 dsh 版本；文件不存在/读取失败返回 null
- * （CI 等无 reference/ 镜像的环境自然降级，由巡检提示补写字段）。 */
+/** 读 docs/reference/README.md 并提取归档 dsh 版本；文件不存在/读取失败返回 null
+ * （CI 等无 docs/reference/ 镜像的环境自然降级，由巡检提示补写字段）。 */
 export function readMirrorVersion() {
-  const file = path.join(ROOT, 'reference', 'README.md')
+  const file = path.join(ROOT, 'docs', 'reference', 'README.md')
   if (!fs.existsSync(file)) return null
   try {
     return parseMirrorVersion(fs.readFileSync(file, 'utf8'))
@@ -288,7 +288,7 @@ export function buildReport({ local, mirror, contract, latest, peers }) {
   if (mirror) {
     if (local && local !== mirror) {
       lines.push(`  ⚠ 镜像漂移: 本地 dsh ${local} ≠ reference 记录 ${mirror}`)
-      lines.push('      → 按 AGENTS.md 漂移控制节重拉 reference/ 镜像、同步合规清单与已知坑、跑 npm run test:probe')
+      lines.push('      → 按 AGENTS.md 漂移控制节重拉 docs/reference/ 镜像、同步合规清单与已知坑、跑 npm run test:probe')
       ok = false
     } else if (local) {
       lines.push(`  ✓ reference 镜像记录: ${mirror}（漂移一致）`)
@@ -298,7 +298,7 @@ export function buildReport({ local, mirror, contract, latest, peers }) {
       lines.push(`  ✓ reference 镜像记录: ${mirror}（本地 dsh 未找到，无法比对漂移）`)
     }
   } else {
-    lines.push('  ⚠ reference/README.md 未记录「归档 dsh 版本」字段（重拉镜像后请补写）')
+    lines.push('  ⚠ docs/reference/README.md 未记录「归档 dsh 版本」字段（重拉镜像后请补写）')
     ok = false
   }
 
@@ -361,7 +361,7 @@ export function buildReport({ local, mirror, contract, latest, peers }) {
     if (!pvLatest) {
       lines.push(`  ⚠ npm 返回的版本 ${latest} 无法解析，跳过新版本比对`)
     } else if (cmp > 0) {
-      lines.push(`  ⚠ npm 最新 dsh ${latest} > 本地 ${local}：升级后请重跑本脚本并重拉 reference/ 镜像`)
+      lines.push(`  ⚠ npm 最新 dsh ${latest} > 本地 ${local}：升级后请重跑本脚本并重拉 docs/reference/ 镜像`)
     } else {
       lines.push(`  ✓ npm 最新 dsh: ${latest}（无新版本）`)
     }

@@ -57,14 +57,14 @@ DSH 消息撤回插件：在用户消息气泡旁加「撤回」按钮，把**�
 | `npm run test:probe`    | 官方 API 字段探针（tests/probe，依赖本机 dsh 安装，无 dsh 自动 skip）                                                                      | **dsh 升级后本地必跑**；新增官方 API 调用点先加探针条目 |
 | `npm run verify:host`   | 装配门禁（inject 声明/端点注册/Config schema/settings 接入/卸载清零）                                                                     | 改 inject/端点/装配后；发版前                |
 | `npm run build`         | host+client 全量打包：build-host.mjs 逐文件转译 src/host/ 13 产物 → lib/ + build-client.mjs 打包 src/client/ → lib/client.js（含产物格式断言） | 改任何 src/ 后必跑（CI 新鲜度门禁拦漏跑）          |
-| `npm run check:dsh`     | dsh 版本巡检（本地 dsh vs reference 镜像 + dsh-contract 契约文档、npm 最新 vs peer 范围）                                                  | 发布前；dsh 升级后                        |
+| `npm run check:dsh`     | dsh 版本巡检（本地 dsh vs docs/reference 镜像 + dsh-contract 契约文档、npm 最新 vs peer 范围）                                                  | 发布前；dsh 升级后                        |
 | `npm run check:upgrade` | dsh 升级一键核验门禁：串联 check:dsh + test:probe + verify:host，输出后提示在 compat-audit.md 头部追加核验记录                                    | **dsh 升级后必跑**（替代手动三步）              |
 
 CI（GitHub Actions）：`npm ci --legacy-peer-deps` + 类型门禁（typecheck）+ 单测 + 产物新鲜度统一门禁（`npm run build && git diff --exit-code lib/`）；探针与 verify:host 依赖本机 dsh，不进 CI。
 
 ## 官方文档合规清单（改代码前对照，2026-08-30 核对）
 
-> 官方文档本地镜像在 `reference/`（索引与更新见 `reference/README.md`）；发布前过一遍本表。
+> 官方文档本地镜像在 `docs/reference/`（索引与更新见 `docs/reference/README.md`）；发布前过一遍本表。
 
 | # | 要求                                                                                                                                                                                                                                                                                                                                                                                                                                                                                | 镜像                        |
 | - | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------- |
@@ -75,7 +75,7 @@ CI（GitHub Actions）：`npm ci --legacy-peer-deps` + 类型门禁（typecheck�
 | 5 | 无跨 apply 的 module 级可变状态：HMR 卸载旧实例→重载新实例，注册清零                                                                                                                                                                                                                                                                                                                                                                                                                                      | 04-config、06-framework    |
 | 6 | 事件域选对：持久事实用 `session/event` 广播；「模型可见即已记录」不变式                                                                                                                                                                                                                                                                                                                                                                                                                                      | 09-architecture、08-events |
 | 7 | 扩展点归位：Chat 节点 `ConversationNodeDefinition` + keyed renderer、设置卡片 settings slot、fork 用 `ctx.sessions.fork`                                                                                                                                                                                                                                                                                                                                                                         | 09、11〜13                  |
-| 8 | 禁止对官方 API 的字段假设：slot props、服务方法签名、事件/节点 data 的字段名与形状，用前必须核验——第一手是官方 `.d.ts`（dsh 安装目录下 `@deepseek-ai/<pkg>/lib/types/**`：slot props 查 `dsh-client-ui-chat` 的 `contract/slots.d.ts`（0.1.2 起由 ui-conversation 迁入），服务契约查 `dsh-api-session-controller/lib/types/client/contract/sessions.d.ts` 与 `dsh-api-workspace-controller` 等 client 服务包），其次 `reference/` 镜像的示例代码，仍存疑读官方构建产物源码。运行时守卫（`typeof` 检查）**不能**补救错误假设：字段本不存在时守卫只是静默 no-op，功能死掉且零报错（issue #9 实证：读不存在的 `loadImage`，两轮修复从未执行） | 11〜13                     |
+| 8 | 禁止对官方 API 的字段假设：slot props、服务方法签名、事件/节点 data 的字段名与形状，用前必须核验——第一手是官方 `.d.ts`（dsh 安装目录下 `@deepseek-ai/<pkg>/lib/types/**`：slot props 查 `dsh-client-ui-chat` 的 `contract/slots.d.ts`（0.1.2 起由 ui-conversation 迁入），服务契约查 `dsh-api-session-controller/lib/types/client/contract/sessions.d.ts` 与 `dsh-api-workspace-controller` 等 client 服务包），其次 `docs/reference/` 镜像的示例代码，仍存疑读官方构建产物源码。运行时守卫（`typeof` 检查）**不能**补救错误假设：字段本不存在时守卫只是静默 no-op，功能死掉且零报错（issue #9 实证：读不存在的 `loadImage`，两轮修复从未执行） | 11〜13                     |
 
 特注：
 
@@ -87,7 +87,7 @@ CI（GitHub Actions）：`npm ci --legacy-peer-deps` + 类型门禁（typecheck�
 
 * 发布前重点复核：#3 无新硬编码、#4 patch 默认值语义、#5 HMR 假设、#8 新增官方 API 调用点的字段已核验。
 
-漂移控制：每 release 周期按 `reference/README.md` 重拉镜像（重拉后同步更新该文件「归档日期」与「归档 dsh 版本」字段），变化同步进本清单、[docs/compat-audit.md](docs/compat-audit.md) 台账与「已知坑」；发布前跑 `npm run check:dsh`（P2-5）做版本巡检——本地 dsh 与镜像漂移、peer 范围越界都会输出提醒。**dsh 升级后跑** **`npm run check:upgrade`（串联三层门禁）并按 compat-audit 台账 I1-I30 定点复查**，替代全文重读「已知坑」。
+漂移控制：每 release 周期按 `docs/reference/README.md` 重拉镜像（重拉后同步更新该文件「归档日期」与「归档 dsh 版本」字段），变化同步进本清单、[docs/compat-audit.md](docs/compat-audit.md) 台账与「已知坑」；发布前跑 `npm run check:dsh`（P2-5）做版本巡检——本地 dsh 与镜像漂移、peer 范围越界都会输出提醒。**dsh 升级后跑** **`npm run check:upgrade`（串联三层门禁）并按 compat-audit 台账 I1-I30 定点复查**，替代全文重读「已知坑」。
 
 ## 关键设计决策（为什么这样写）
 
