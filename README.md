@@ -6,6 +6,7 @@
 [![npm downloads](https://img.shields.io/npm/dt/dsh-recall-plugin.svg)](https://www.npmjs.com/package/dsh-recall-plugin)
 ![License](https://img.shields.io/badge/license-MIT-blue)
 [![DSH](https://img.shields.io/badge/DSH-0.1.2--rc.1-blue)](https://github.com/deepseek-ai/deepseek-harness/releases/tag/dsh-v0.1.2-rc.1)
+[![DSH](https://img.shields.io/badge/DSH-0.1.3--alpha.1-red)](https://github.com/deepseek-ai/deepseek-harness/releases/tag/dsh-v0.1.3-alpha.1)
 ---
 **在任意一条你发过的消息下方**，**点「↶ 撤回」**，**工作区文件和对话历史一起回到那条消息发出之前的状态**
 ---
