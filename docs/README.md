@@ -9,7 +9,7 @@ docs/
 ├── README.md        # 本文件：目录索引与文档规范
 ├── dsh-contract.md  # DSH 契约文档：插件依赖面详细契约 + 未依赖面全量清单（dsh 升级核查底稿）
 ├── routing-interplay.md  # 与 dsh-routing-suite 的交互说明（撤回 × 路由阶段，事实文档）
-├── reference/       # 官方文档本地镜像（gitignore 不入库；索引与重拉方式见 reference/README.md）
+├── reference/       # 官方文档本地镜像（随仓库提交；索引与重拉方式见 reference/README.md）
 ├── plans/               # 计划文档族（状态即目录：pending/ 待办，completed/ 已完成）
 │   ├── improvement-plan.md      # 总索引（单一事实源：计划清单、状态与全局顺序）
 │   ├── research-competitors.md  # 竞品调研（改进计划的调研底稿，静态归档，不参与状态分目录）
@@ -41,7 +41,7 @@ docs/
 | 分期 / 专题实施计划（已完成） | `docs/plans/completed/` | 同上，**文件名不变**（代码注释/台账按文件名引用） | `completed/plan-p1.md` |
 | 冒烟 / 回归验证清单 | `docs/plans/pending/`，全部执行完移入 `completed/` | `smoke-<范围>.md` | `pending/smoke-checklist.md` |
 | 长期规范文档（存储格式、安全模型等） | `docs/` 根 | 小写单词，不带 plan | `dsh-contract.md`、`design-tokens.md`；未来的 `format.md`、`security.md`（见 pending/plan-p2.md P2-2） |
-| 官方文档本地镜像 | `docs/reference/` | 保留官方编号文件名（01〜13 + README），gitignore 不入库 | `docs/reference/README.md` |
+| 官方文档本地镜像 | `docs/reference/` | 保留官方编号文件名（01〜13 + README），随仓库提交 | `docs/reference/README.md` |
 | 调研报告 | `docs/plans/`（与衍生计划放一起，积累多了再拆 `research/`） | `research-<主题>.md` | `research-competitors.md` |
 | dsh 版本升级影响评估 | `docs/upgrade-assessments/` | `dsh-<版本号>.md`（版本快照，无完成态，不进 plans 状态目录；每 dsh 版本一份） | `dsh-0.1.3-alpha.1.md` |
 

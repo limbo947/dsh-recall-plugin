@@ -18,7 +18,7 @@
 
 - **新增 `docs/design-tokens.md` 设计令牌与组件配方参考**：把本次对齐所核验的官方事实源（`dsh-client-ui-theme` 令牌定义、`dsh-client-ui-settings-plugins` 组件配方）沉淀为长期规范文档——令牌命名空间说明、颜色/排版速查（含本插件使用处映射）、八类官方组件配方摘录（卡片/按钮组/表单字段/badge/switch/分组折叠/分隔线规格/阴影）、本插件落地约定与 dsh 升级后的重抽比对流程。后续改 client UI 先查此文档，避免凭印象写颜色与字阶。
 
-- **`reference/` 官方文档镜像整合进 `docs/`**：目录 `reference/` → `docs/reference/`（.gitignore 同步改 `docs/reference/`，镜像仍不入库），官方文档镜像与项目文档收敛到同一目录；同步更新 AGENTS.md 合规清单与漂移控制节、`scripts/check-dsh-version.mjs`（镜像读取路径改为 `docs/reference/README.md`）、`scripts/check-upgrade.mjs` 提示文案、package-layout 单测禁入清单（`docs/` 已覆盖镜像）、`docs/dsh-contract.md` 升级指引、compat-audit 台账 I6 复查动作的镜像路径与 docs/README.md 目录索引；compat-audit 头部与各计划文档中的历史核验记录按当时原文保留。
+- **`reference/` 官方文档镜像整合进 `docs/`**：目录 `reference/` → `docs/reference/`（镜像随仓库提交），官方文档镜像与项目文档收敛到同一目录；同步更新 AGENTS.md 合规清单与漂移控制节、`scripts/check-dsh-version.mjs`（镜像读取路径改为 `docs/reference/README.md`）、`scripts/check-upgrade.mjs` 提示文案、package-layout 单测禁入清单（`docs/` 已覆盖镜像）、`docs/dsh-contract.md` 升级指引、compat-audit 台账 I6 复查动作的镜像路径与 docs/README.md 目录索引；compat-audit 头部与各计划文档中的历史核验记录按当时原文保留。
 
 ## [2.3.2] - 2026-09-04
 

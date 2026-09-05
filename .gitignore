@@ -1,7 +1,6 @@
 node_modules/
 .dsh-recall-snapshots/
 *.log
-docs/reference/
 .codebuddy/
 .zcode/
 codebuddy.md
