@@ -1,6 +1,6 @@
 {
   "name": "dsh-recall-plugin",
-  "version": "2.4.9",
+  "version": "2.4.10",
   "description": "在 DSH 中撤回自己发过的消息：工作区文件与对话历史一起回到那条消息发出之前，消息的文本与附件自动放回输入框，改完即可重发。文件走独立影子 git 快照（不碰项目自身的 git），对话走官方 sessions.fork，原会话归档可找回。",
   "icon": "assets/icon.svg",
   "type": "module",

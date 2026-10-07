@@ -65,7 +65,7 @@ DSH 消息撤回插件：在用户消息气泡旁加「撤回」按钮，把**�
 
 | 命令                      | 作用                                                                                                                      | 何时跑                                |
 | ----------------------- | ----------------------------------------------------------------------------------------------------------------------- | ---------------------------------- |
-| `npm test`              | vitest 纯逻辑单测（tests/unit，37 文件，无 DSH 依赖，CI 同跑）                                                                           | 改任何逻辑后                             |
+| `npm test`              | vitest 纯逻辑单测（tests/unit，39 文件，无 DSH 依赖，CI 同跑）                                                                           | 改任何逻辑后                             |
 | `npm run test:client`   | client 组件测试（tests/client，6 文件；vitest + jsdom 独立配置，stub fetch/服务驱动，含 i18n 双语链路，CI 同跑）                                            | 改 client UI 后                        |
 | `npm run typecheck`     | `tsc --noEmit` 全量类型检查（src/**/\* + tests/types/**/\* 编译期契约断言 + tests/client/**/\*；tests/unit 与 scripts/\*.mjs 不在 include 范围）                           | 改任何 src/ 后；发版前（CI 类型门禁置于单测前）       |
 | `npm run test:probe`    | 官方 API 字段探针（tests/probe，依赖本机 dsh 安装，无 dsh 自动 skip）                                                                      | **dsh 升级后本地必跑**；新增官方 API 调用点先加探针条目 |
