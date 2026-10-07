@@ -77,6 +77,49 @@ describe('脚本模板同名导出契约', () => {
     expect(posix.fileWriteStdinCmd('some/file.tmp')).toBe("cat > 'some/file.tmp'")
   })
 
+  it('junction 爆炸防护：pwsh 三处脚本在 add -A 之前把目录重解析点并入排除表', () => {
+    // 事实来源（win32 实测）：git for Windows 把 NTFS junction 当普通目录，add -A
+    // 会递归进入链接目标——core.symlinks 取 true / false / 默认三种取值同样递归，
+    // 无法用配置规避。自引用 junction（a/link -> a）因此按 Windows 的「路径中最多
+    // 31 个重解析点」上限把同一棵子树重复索引：2 个真实文件的工作区产出 64 条索引、
+    // 36 条路径长度 > 260；真实病例 1.24 万条 → 39.2 万条、.git/index 168 MB，
+    // preview/快照/回退全部退化到分钟级。
+    // 修法落在 excludeSyncBlock（三处脚本都在 add -A 之前调用它）而不是脚本主体：
+    // 一处改动覆盖三条链路，导出契约与脚本顺序零变化。
+    // POSIX 有意不做：git 把指向目录的符号链接记成 120000 条目、不递归进目标，
+    // 照搬反而会把合法快照内容剔出快照（见 scripts.posix.ts 同名注释）。
+    const builds = [
+      (api) => api.snapshotScript('ROOT', FAKE_STORE, 'git-exe', 'm1', []),
+      (api) => api.diffScript('ROOT', FAKE_STORE, 'git-exe', 'snap-1', []),
+      (api) => api.rollbackScript('ROOT', FAKE_STORE, 'git-exe', 'snap-1', []),
+    ]
+    for (const build of builds) {
+      const s = build(pwsh)
+      // 重解析点发现 + oversize 遍历剪枝，两处都要有
+      expect((s.match(/ReparsePoint/g) ?? []).length).toBeGreaterThanOrEqual(2)
+      expect(s).toContain('$reparseRel.Add(')
+      expect(s).toContain('$lines = $lines + @($reparseRel)')
+      // 顺序钉：并入必须在 add -A 之前，否则首轮仍会把幽灵条目加进索引
+      expect(s.indexOf('$lines = $lines + @($reparseRel)')).toBeLessThan(s.indexOf('add -A'))
+      // 守卫钉（评审 P2）：遍历被 if ($root) 显式守卫——ensureGitScript 无 $root，
+      // 跳过是显式设计，不依赖「Push($null) 被 catch 吞掉」的巧合
+      expect(s).toContain('if ($root) {')
+      // 重建钉（评审 P1）：幽灵条目上万时分批清理是「条数/100 次子进程 × 全量重写
+      // index」（实测 37.9 万条 / 168 MB 估 10–60 分钟），超阈值改 read-tree --empty
+      // 交给随后 add -A 重建；失败必须显式 throw，否则幽灵条目随 exclude 已重写
+      // 永久滞留（清理不再触发）
+      expect(s).toContain('if ($hit.Count -gt 10000) {')
+      expect(s).toContain('read-tree --empty')
+      expect(s).toContain("throw ('git read-tree --empty failed")
+    }
+    // P2 的 ensureGit 侧：建仓脚本无 $root 入参，同样必须走显式守卫路径
+    expect(pwsh.ensureGitScript(FAKE_STORE, 'git-exe', [])).toContain('if ($root) {')
+    expect(posix.snapshotScript('ROOT', FAKE_STORE, 'git-exe', 'm1', [])).not.toContain('ReparsePoint')
+    // 重建路径是 win32 病例的针对性处置：posix 的 xargs 自适应合批无此规模问题，
+    // 且幽灵爆炸成因（junction 递归）在 posix 不存在，不钉、也不应出现
+    expect(posix.snapshotScript('ROOT', FAKE_STORE, 'git-exe', 'm1', [])).not.toContain('read-tree --empty')
+  })
+
   for (const key of pwshKeys) {
     it(`${key} 两侧类型一致`, () => {
       const p = pwsh[key]
@@ -288,10 +331,14 @@ describe('关键模板结构断言', () => {
   })
 
   it('oversize 目录级跳过：两平台按 exclude basename pattern 跳过大目录子树', () => {
-    // pwsh：HashSet skip 集 + 压栈过滤（依赖前置 excludeSyncBlock 的 $lines）
+    // pwsh：HashSet skip 集 + 压栈过滤（依赖前置 excludeSyncBlock 的 $lines）；
+    // 同一次压栈过滤还兼作目录重解析点剪枝——junction/symlink 不进入，避免
+    // win32 上 git 那份「按 31 层重解析点上限重复索引」的爆炸（详见下方
+    // junction 爆炸防护用例与 scripts.pwsh.ts reparseDirsBlock 注释）。
     const pwshSnap = pwsh.snapshotScript('ROOT', FAKE_STORE, 'git-exe', 'm1', [])
     expect(pwshSnap).toContain('$oversizeSkip')
-    expect(pwshSnap).toContain('if (-not $oversizeSkip.Contains($d.Name)) { $oversizeStack.Push($d.FullName) }')
+    expect(pwshSnap).toContain('if ($oversizeSkip.Contains($d.Name)) { continue }')
+    expect(pwshSnap).toContain('if (($d.Attributes -band [System.IO.FileAttributes]::ReparsePoint) -ne 0) { continue }')
     // posix：find ( -type d ( -name A -o -name B ) ) -prune -o 前缀（依赖前置
     // excludeSyncBlock 的 $new_exc）。括号必须是数组元素里的单字符数据——写成
     // "\(" 时 bash 不剥反斜杠，find 收到两字符 token 直接报「paths must

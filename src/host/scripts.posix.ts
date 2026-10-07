@@ -118,6 +118,12 @@ function oversizeBlock(maxBytes: number): string {
 // 兼容 Windows 上编辑带 CRLF 的 exclude.txt。
 // base 基础排除表按调用注入（config.baseExcludes 可调），不硬编码。
 // 依赖外层已定义的 $git/$g。
+// 平台差异（有意的不对称，勿「补平」）：pwsh 版在这里额外发现目录重解析点并并入
+// 排除表——git for Windows 把 NTFS junction 当普通目录递归，自引用 junction 会把
+// index 撑到 Windows 的 31 层重解析点上限（实测 1.24 万条 → 39.2 万条）。
+// POSIX 的 git 把指向目录的符号链接记成 120000 条目、不递归进目标，故本侧无事可做；
+// 若照搬该发现，反而会把本来就是合法快照内容的符号链接从快照里剔除（行为回归）。
+// POSIX 的 bind mount 环不覆盖，记为已知缺口。
 // - PF-9 条件化：新旧内容比对（命令替换对两侧同样剥尾随换行，比对稳定）
 //   相同则跳过重写**并跳过**清理循环（每条消息常态省 1 次 git 子进程 +
 //   1 次盘写）；语义安全论证见 pwsh 版同注释（exclude 未变时 index 已净，

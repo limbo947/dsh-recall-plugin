@@ -73,6 +73,68 @@ function dropGitlinksBlock() {
   ].join('\n')
 }
 
+// exclude 表里 basename 形式（无通配、无内部斜杠、非 ! 反选）的 pattern 按
+// gitignore 语义匹配任意层级同名目录，遍历时把这类目录名收进 HashSet 整棵子树跳过。
+// 被 oversizeBlock（超大文件扫描）与 reparseDirsBlock（重解析点发现）共用：两处
+// 必须同判据，判据本身与 scripts.posix.ts 的 oversizeBlock / exclude-patterns.ts 的
+// dirNamePatterns 三处同源——改判据要同步那两个文件。
+// 依赖外层已定义的 $lines。
+function dirSkipSetBlock(name: string): string {
+  return [
+    '$' + name + ' = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)',
+    'foreach ($p in $lines) {',
+    '  $t = "$p".Trim()',
+    "  if (-not $t -or $t.StartsWith('#') -or $t.StartsWith('!')) { continue }",
+    "  $t = $t -replace '/$', ''",
+    "  if ($t -notmatch '[*?\\[\\]/\\\\]') { [void]$" + name + '.Add($t) }',
+    '}'
+  ].join('\n')
+}
+
+// 目录重解析点（junction / 目录符号链接）发现，结果并进 info/exclude。
+// 起因：git for Windows 把 NTFS junction 当普通目录，add -A 会递归进入其链接目标
+// ——core.symlinks 取 true / false / 默认实测**同样递归**，无法用配置规避。于是自引用
+// junction（`a/link -> a`）会按 Windows 的「路径中最多 31 个重解析点」上限把同一棵子树
+// 重复索引：实测 2 个真实文件的工作区产出 64 条索引（36 条路径长度 > 260），真实病例
+// 1.24 万条 → 39.2 万条、.git/index 168 MB，并让 preview/快照/回退退化到分钟级
+// （diffScript 的 PowerShell 侧要为两侧各建一份 39 万条哈希表）。
+// 修法：遍历目录树（不进入链接目标）把重解析点目录按相对 root 的路径连同尾斜杠并入
+// 排除表。本函数由 excludeSyncBlock 在 add -A **之前**调用，git 因此根本不进入它们；
+// 已跟踪的旧幽灵条目由 excludeSyncBlock 既有的 ls-files -i -c 分支一次清掉。路径带 `/`
+// 中缀即按 gitignore 锚定到仓库根（=工作区 root），与本意一致。
+// 遍历成本：只枚举目录、不 stat 文件，且与 oversizeBlock 同一套目录名剪枝——无重解析点
+// 的工作区不产生任何 exclude 差异，条件化比对因此跳过重写与清理循环（零常态开销）。
+// 平台差异：POSIX 的 git 把指向目录的符号链接记成 120000 条目、不递归，故那里不做本发现
+//（见 scripts.posix.ts 同名注释）；POSIX 的 bind mount 环不覆盖，记为已知缺口。
+// $root 仅 snapshot/diff/rollback 定义；ensureGitScript 也走 excludeSyncBlock 但没有
+// $root（建仓脚本不遍历工作区），if ($root) 守卫让「跳过」是显式设计，而非
+//「Push($null) → DirectoryInfo.new 抛错被 catch 吞掉」的巧合路径——三处主脚本
+// 随后在 add -A 之前重做发现，无漏检窗口。$lines 由 excludeSyncBlock 前置定义，恒可用。
+function reparseDirsBlock(): string {
+  return [
+    dirSkipSetBlock('reparseSkip'),
+    '$reparseRel = [System.Collections.Generic.List[string]]::new()',
+    'if ($root) {',
+    '$reparseStack = [System.Collections.Generic.Stack[string]]::new()',
+    '$reparseStack.Push($root)',
+    'while ($reparseStack.Count -gt 0) {',
+    '  $dir = $reparseStack.Pop()',
+    '  try {',
+    '    $di = [System.IO.DirectoryInfo]::new($dir)',
+    '    foreach ($d in $di.EnumerateDirectories()) {',
+    '      if ($reparseSkip.Contains($d.Name)) { continue }',
+    '      if (($d.Attributes -band [System.IO.FileAttributes]::ReparsePoint) -ne 0) {',
+    "        $reparseRel.Add($d.FullName.Substring($root.Length + 1).Replace('\\','/') + '/')",
+    '        continue',
+    '      }',
+    '      $reparseStack.Push($d.FullName)',
+    '    }',
+    '  } catch {}',
+    '}',
+    '}'
+  ].join('\n')
+}
+
 // 剔除超大文件：.NET 手动栈遍历（PF-3）替代 Get-ChildItem -Recurse——后者
 // 每文件走一遍 PowerShell 管道对象，几万文件时数秒，且 snapshot/diff/rollback
 // 三条脚本各调一次（一次完整撤回 4 次全工作区枚举）。手动栈是 .NET 4.x
@@ -91,13 +153,7 @@ function dropGitlinksBlock() {
 // 依赖外层已定义的 $git/$g/$root；$lines 由前置的 excludeSyncBlock 定义。
 function oversizeBlock(maxBytes: number): string {
   return [
-    '$oversizeSkip = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)',
-    'foreach ($p in $lines) {',
-    '  $t = "$p".Trim()',
-    "  if (-not $t -or $t.StartsWith('#') -or $t.StartsWith('!')) { continue }",
-    "  $t = $t -replace '/$', ''",
-    "  if ($t -notmatch '[*?\\[\\]/\\\\]') { [void]$oversizeSkip.Add($t) }",
-    '}',
+    dirSkipSetBlock('oversizeSkip'),
     '$oversizeStack = [System.Collections.Generic.Stack[string]]::new()',
     '$oversizeStack.Push($root)',
     '$oversizeRel = [System.Collections.Generic.List[string]]::new()',
@@ -111,7 +167,9 @@ function oversizeBlock(maxBytes: number): string {
     '      }',
     '    }',
     '    foreach ($d in $di.EnumerateDirectories()) {',
-    '      if (-not $oversizeSkip.Contains($d.Name)) { $oversizeStack.Push($d.FullName) }',
+    '      if ($oversizeSkip.Contains($d.Name)) { continue }',
+    '      if (($d.Attributes -band [System.IO.FileAttributes]::ReparsePoint) -ne 0) { continue }',
+    '      $oversizeStack.Push($d.FullName)',
     '    }',
     '  } catch {}',
     '}',
@@ -142,6 +200,16 @@ function oversizeBlock(maxBytes: number): string {
 //   链路，「改排除即时生效」承诺（AGENTS.md 钉）不变。
 // - PF-9 合批：清理循环逐条 update-index 每次 fork 一个 git 子进程，改为
 //   多路径合参（每批 100，与 purgeTags 分块同款纪律）N 次 → N/100。
+// - 大批量改整棵重建（issue #20 实机病例）：每次 update-index 调用都重写整个
+//   index，幽灵条目上万时分批清理是「条数/100 次子进程 × 全量重写」（实测
+//   37.9 万条 / 168 MB index，估 10–60 分钟）——升级后首次快照仍会表现为
+//   「卡在正在计算变更」。此时 read-tree --empty 清索引、交给随后的 add -A
+//   按新 exclude 重建（index 本就是可重建缓存，与 gcScript 治 issue #18 同款
+//   技巧），代价只是丢 stat 缓存全量重哈希一次，分钟级收尾。阈值 10000：
+//   小 index 上该量级分批仅秒级、重建反而全量重哈希工作区，不该切。
+//   ensureGitScript 链路无随后 add：清后 index 留空至下次快照，缓存语义安全。
+//   read-tree 失败必须显式 throw（pwsh 对 native 非零不抛，I14）：静默失败会让
+//   幽灵条目随「exclude 已重写、$same 恒真、清理不再触发」永久滞留。
 function excludeSyncBlock(excludeFile: string, base: string[]): string {
   // 兜底含两种存储目录名：降级为 .dsh-recall-snapshots/，home 存储为
   // dsh-recall-snapshots/（root=HOME 时落入工作区，漏排除会自吞，issue #6）
@@ -151,6 +219,8 @@ function excludeSyncBlock(excludeFile: string, base: string[]): string {
     '$userPats = @()',
     "if (Test-Path -LiteralPath $exFile) { $userPats = @(Get-Content -LiteralPath $exFile -Encoding UTF8 -ErrorAction SilentlyContinue | Where-Object { $t = $_.Trim(); $t -and -not $t.StartsWith('#') }) }",
     "$lines = @('') + @(" + baseList + ") + $userPats",
+    reparseDirsBlock(),
+    '$lines = $lines + @($reparseRel)',
     "$exc = Join-Path $g 'info\\exclude'",
     '$excOld = @(Get-Content -LiteralPath $exc -Encoding UTF8 -ErrorAction SilentlyContinue)',
     '$same = ($excOld.Count -eq $lines.Count)',
@@ -162,9 +232,14 @@ function excludeSyncBlock(excludeFile: string, base: string[]): string {
     'if (-not $same) {',
     '  Set-Content -LiteralPath $exc -Value $lines -Encoding utf8',
     '  $hit = @(& $git -c core.quotePath=false --literal-pathspecs --git-dir=$g ls-files -i -c --exclude-from=$exc | Where-Object { $_ })',
-    '  for ($i = 0; $i -lt $hit.Count; $i += 100) {',
-    '    $batch = @($hit[$i..([Math]::Min($i + 99, $hit.Count - 1))])',
-    '    & $git --literal-pathspecs --git-dir=$g update-index --force-remove -- $batch',
+    '  if ($hit.Count -gt 10000) {',
+    '    & $git --git-dir=$g read-tree --empty',
+    "    if ($LASTEXITCODE -ne 0) { throw ('git read-tree --empty failed (exit ' + $LASTEXITCODE + ')') }",
+    '  } else {',
+    '    for ($i = 0; $i -lt $hit.Count; $i += 100) {',
+    '      $batch = @($hit[$i..([Math]::Min($i + 99, $hit.Count - 1))])',
+    '      & $git --literal-pathspecs --git-dir=$g update-index --force-remove -- $batch',
+    '    }',
     '  }',
     '}',
   ].join('\n')

@@ -60,6 +60,7 @@
 - 目标工作区的 agent 正在运行时无法发起撤回（防护设计，先停止 agent 再撤回）。
 - 支持 Windows（PowerShell 5.1/7 + git CLI）与 Linux/macOS（bash + git CLI）。Windows 真机验证充分；Linux 已在 WSL2（Ubuntu 26.04，bash 5.3 + git 2.53）实测全流程（含中文路径、home 降级、会话清理、gc）；macOS 侧脚本按 bash 3.2 兼容编写，尚未真机实测。
 - 工作区内嵌套的其他 git 仓库（子目录自带 `.git`）无法索引：其余部分快照照常（fail-open，页面会提示跳过了哪些路径），但其内容不参与回退。
+- 工作区内的**目录重解析点**（junction / 目录符号链接）不参与快照：它们指向的子树不会被索引，因此那部分内容不参与回退。win32 上这是必需的——git for Windows 把 junction 当普通目录递归，自引用 junction 会让索引膨胀到 Windows 的 31 层重解析点上限（实测 2 个文件的工作区产出 64 条索引）；POSIX 侧符号链接照常进快照（git 记成 `120000` 条目，不递归进目标）。
 - 文件名含换行/TAB 的极端情形超出 diff 清单的解析能力（概率可忽略）。
 - **与 dsh-routing-suite（渐进式工具披露路由）的交互**：同时启用其 router-standard 预设时，撤回经 `sessions.fork` 出新会话会把路由阶段重置为默认（工具面临时收窄）。现象、成因与解决方案见 [docs/routing-interplay.md](docs/routing-interplay.md)。
 
