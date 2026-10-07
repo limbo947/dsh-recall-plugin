@@ -20,8 +20,14 @@
 > **本机 profile 实装（装载级）验证通过**：web profile pin `2.4.9` → `2.4.10`、`minimumReleaseAgeExclude` 补
 > `2.4.10`、`pnpm install` 实装（8.8s）；`node_modules/dsh-recall-plugin` 为普通目录（npm 模式）、版本 2.4.10、
 > peer 含 0.2.1 段；新代码标记在位（`lib/scripts.pwsh.js` 含 `read-tree --empty` / `ReparsePoint` / `reparseRel.Sort()`
-> 与转义语句，`lib/scripts.posix.js` 含分批 pathspec archive）。**未做宿主启停验证**：本机 dsh web 实例运行中
-> （端口 3080），重启会打断用户会话——安装已就位，下次重启即装载 2.4.10，建议后续补一次启停冒烟。
+> 与转义语句，`lib/scripts.posix.js` 含分批 pathspec archive）。desktop profile 一并实装 2.4.10（pin +
+> `minimumReleaseAgeExclude` + `pnpm install`，10s）。**宿主启停冒烟（同日补做，当日实例已重启）通过**：3080 上的
+> 原实例实为应用自带 CLI shim（`resources\runtime\cli\bin\dsh.cmd`，设 `ELECTRON_RUN_AS_NODE=1` 后执行 `web` 子命令，
+> 走 web profile）——停旧实例（`taskkill /T /F`，端口即刻释放、无残留）→ 原形态重启并捕获 stderr：出现插件自身
+> `recall shell dialect probe: pwsh`、**无任何 skip/compat 行**（兼容门禁未跳过本插件），3080 重新监听；
+> 启动预热落地：6 个有属主的 store 心跳文件在启动后 1–2 秒内批量刷新（对照重启前为 10-01/10-03/10-04 的陈旧
+> 时间戳）。桌面 GUI 经 `Start-Process` 直接拉起未能驻留（无交互桌面会话，进程自行退出；用户日常走 GUI 即可，
+> 与本轮 web 宿主形态互不影响）。
 >
 > **2.4.9 发版核验（2026-10-03）**：插件 **2.4.9 已发布**（npm `latest`＝2.4.9、GitHub Release `v2.4.9` 已创建、
 > 非 draft/prerelease，tag `v2.4.9` 指向 `5b21369`）；发布提交两个——`d008fb1`（feat：issue #19 撤回完成事件/回调，
