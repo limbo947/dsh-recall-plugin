@@ -98,9 +98,20 @@ describe('脚本模板同名导出契约', () => {
       // 重解析点发现 + oversize 遍历剪枝，两处都要有
       expect((s.match(/ReparsePoint/g) ?? []).length).toBeGreaterThanOrEqual(2)
       expect(s).toContain('$reparseRel.Add(')
-      expect(s).toContain('$lines = $lines + @($reparseRel)')
+      // 写盘顺序钉（评审 P3 逃生口）：base + reparse + userPats——gitignore 后写
+      // 胜出，用户排除行垫底才可用 !path/ 反选重纳良性 junction
+      expect(s).toContain('+ @($reparseRel) + $userPats')
       // 顺序钉：并入必须在 add -A 之前，否则首轮仍会把幽灵条目加进索引
-      expect(s.indexOf('$lines = $lines + @($reparseRel)')).toBeLessThan(s.indexOf('add -A'))
+      expect(s.indexOf('+ @($reparseRel) + $userPats')).toBeLessThan(s.indexOf('add -A'))
+      // 机器行转义钉（评审 P3）：目录名以 #/! 开头或含 [ 会被 gitignore 解析成
+      // 注释/反选/字符组而静默漏排除，机器生成的行必须转义
+      expect(s).toContain('$rel = $rel -replace "\\[", "\\["')
+      expect(s).toContain('StartsWith("#")')
+      // 反斜杠本身也要钉：JS 串里 "\" 会被吃掉（实弹踩坑——只钉 StartsWith 时
+      // 反斜杠丢失照样全绿），必须钉含转义符的完整语句
+      expect(s).toContain('$rel = "\\" + $rel')
+      // 排序钉（评审 P3）：exclude 内容序与 NTFS 枚举序脱钩，防无谓重写
+      expect(s).toContain('$reparseRel.Sort()')
       // 守卫钉（评审 P2）：遍历被 if ($root) 显式守卫——ensureGitScript 无 $root，
       // 跳过是显式设计，不依赖「Push($null) 被 catch 吞掉」的巧合
       expect(s).toContain('if ($root) {')
@@ -118,6 +129,27 @@ describe('脚本模板同名导出契约', () => {
     // 重建路径是 win32 病例的针对性处置：posix 的 xargs 自适应合批无此规模问题，
     // 且幽灵爆炸成因（junction 递归）在 posix 不存在，不钉、也不应出现
     expect(posix.snapshotScript('ROOT', FAKE_STORE, 'git-exe', 'm1', [])).not.toContain('read-tree --empty')
+  })
+
+  it('issue #22 变更集恢复：rollback 恢复侧只处理 diff 出的变更项（双侧）', () => {
+    // 旧版恢复侧整树 archive + 解压（restored=目标树全量条数）：改 1 个文件也
+    // 全树打 zip/解包（实机 39.2 万条幽灵条目时打出 5.11 GB zip），未变更文件
+    // mtime 全变误触发构建增量/文件监听。现按 sha 求恢复集，分批 pathspec
+    // archive 只解变更项；restored 与 preview diff 计数逐项相等；变更过半回退
+    // 整树单遍（N/100 次 archive+解压的启动开销超过单遍）。
+    const pw = pwsh.rollbackScript('ROOT', FAKE_STORE, 'git-exe', 'snap-1', [])
+    expect(pw).toContain('$restoreRel')
+    expect(pw).toContain('if ($restoreRel.Count * 2 -ge $targetMap.Count) {')
+    expect(pw).toContain('--literal-pathspecs --git-dir=$g archive --format=zip --output=$zip')
+    // archive 失败必须显式 throw（pwsh 对 native 非零不抛，I14）——不许半回退
+    // 报 ROLLBACK_OK（F-G2）
+    expect(pw).toContain("throw ('git archive failed")
+    expect(pw).not.toContain('$restored = $targetMap.Count')
+    const po = posix.rollbackScript('ROOT', FAKE_STORE, 'git-exe', 'snap-1', [])
+    expect(po).toContain('tmpr=')
+    expect(po).toContain('[ $((restored * 2)) -ge "$total" ]')
+    expect(po).toContain('-- "${batch[@]}" | tar -x -m -C "$root"')
+    expect(po).not.toContain('restored=$(wc -l < "$tmpt"')
   })
 
   for (const key of pwshKeys) {

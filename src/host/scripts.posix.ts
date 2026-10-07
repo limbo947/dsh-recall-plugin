@@ -376,8 +376,17 @@ export function diffScript(root: string, store: ScriptStore, gitExe: string, tag
   ].join('\n')
 }
 
-// 回退：archive | tar 直接管到工作区（无需 Windows 的 zip 中转），
-// 空目标跳过；再删除「当前有、目标无」的文件（awk 求差集）。
+// 回退：恢复侧按 diff 变更集走 git archive | tar 直接管到工作区（无需 Windows
+// 的 zip 中转），删除侧按清单移除「当前有、目标无」的文件（awk 求差集）。
+// 变更集恢复（issue #22，旧版整树 archive）：旧版 restored 是目标树全量条数，
+// 改 1 个文件也把整棵快照树解包一遍（大工作区全树 IO；实机 39.2 万条幽灵条目
+// 时 pwsh 侧实测打出 5.11 GB zip），未变更文件 mtime 全变误触发构建增量/文件
+// 监听。现用 awk 求恢复集（目标有、当前无或 sha 不同，与 diffScript 的
+// modified+restored 同集合），git archive <tag> -- <paths> 分批（100/批，与
+// pwsh 侧同款纪律）只解变更项；restored 随之变成实际恢复条数，与 preview 的
+// diff 计数逐项相等（preview 的 added=本删除侧、modified+restored=本恢复侧）。
+// 变更过半（restored*2 ≥ total）时整树一遍更优（N/100 次 archive+tar 的启动
+// 开销超过单遍），回退旧路径。空恢复集跳过 archive，只执行删除。
 // pipefail 保证 git archive 失败时整条非零退出。
 // 删除侧失败必须响亮（F-G2）：set -e 豁免 if 条件内的 rm 失败——若写成
 // `rm ... && deleted++` 裸链，rm 失败（权限等）被静默跳过、脚本仍输出
@@ -388,19 +397,44 @@ export function rollbackScript(root: string, store: ScriptStore, gitExe: string,
   return [
     'set -e -o pipefail',
     collectListsBlock(store, gitExe, root, tag, base),
-    "trap 'rm -f \"$tmpc\" \"$tmpt\"' EXIT",
-    'restored=$(wc -l < "$tmpt" | tr -d \' \')',
+    'tmpr=' + psq(store.dir + '/diff-restore.$$'),
+    "trap 'rm -f \"$tmpc\" \"$tmpt\" \"$tmpr\"' EXIT",
+    // 恢复集 = 目标有、当前无或 sha 不同（awk 结构与 diffScript 同款：
+    // cur 侧 "mode sha stage<TAB>path" 取 a[2]，target 侧 "mode type sha<TAB>path" 取 a[3]）
+    'awk -F\'\\t\' \'',
+    '  FNR==1 { fidx++ }',
+    '  fidx==1 { split($1, a, " "); cur[$2]=a[2]; next }',
+    '  { split($1, a, " "); tgt[$2]=a[3] }',
+    '  END { for (p in tgt) if (!(p in cur) || cur[p] != tgt[p]) print p }',
+    "' \"$tmpc\" \"$tmpt\" > \"$tmpr\"",
+    'restored=$(wc -l < "$tmpr" | tr -d \' \')',
+    'total=$(wc -l < "$tmpt" | tr -d \' \')',
     'if [ "$restored" -gt 0 ]; then',
-    // -m（--touch）：解包不恢复归档成员的 mtime（文件 mtime = 解包时刻）。
-    // 必须如此：tar 默认保留归档内 mtime，而快照→篡改→回滚常在数秒内
-    // 完成，恢复出的 mtime 可能与 index 里旧条目的 stat 记录碰撞，下一次
-    // add -A 的 stat 缓存误判「未变更」跳过 re-hash——工作区内容与快照
-    // 从此脱钩（实测解包出篡改前内容的间歇性失败）。Windows 版的
+    '  if [ $((restored * 2)) -ge "$total" ]; then',
+    // -m（--touch，两处 tar 调用同款）：解包不恢复归档成员的 mtime（文件
+    // mtime = 解包时刻）。必须如此：tar 默认保留归档内 mtime，而快照→篡改→
+    // 回滚常在数秒内完成，恢复出的 mtime 可能与 index 里旧条目的 stat 记录
+    // 碰撞，下一次 add -A 的 stat 缓存误判「未变更」跳过 re-hash——工作区
+    // 内容与快照从此脱钩（实测解包出篡改前内容的间歇性失败）。Windows 版的
     // Expand-Archive 天然把 mtime 设为解包时刻，无此问题；-m 让 tar 对齐。
-    '  "$git" --git-dir="$g" archive ' + psq(tag) + ' | tar -x -m -C "$root"',
+    '    "$git" --git-dir="$g" archive ' + psq(tag) + ' | tar -x -m -C "$root"',
+    '  else',
+    '    batch=()',
+    '    while IFS= read -r p; do',
+    '      if [ -z "$p" ]; then continue; fi',
+    '      batch+=("$p")',
+    '      if [ "${#batch[@]}" -ge 100 ]; then',
+    '        "$git" --literal-pathspecs --git-dir="$g" archive ' + psq(tag) + ' -- "${batch[@]}" | tar -x -m -C "$root"',
+    '        batch=()',
+    '      fi',
+    '    done < "$tmpr"',
+    '    if [ "${#batch[@]}" -gt 0 ]; then',
+    '      "$git" --literal-pathspecs --git-dir="$g" archive ' + psq(tag) + ' -- "${batch[@]}" | tar -x -m -C "$root"',
+    '    fi',
+    '  fi',
     'fi',
     'tmpd=' + psq(store.dir + '/diff-del.$$'),
-    "trap 'rm -f \"$tmpc\" \"$tmpt\" \"$tmpd\"' EXIT",
+    "trap 'rm -f \"$tmpc\" \"$tmpt\" \"$tmpr\" \"$tmpd\"' EXIT",
     'awk -F\'\\t\' \'',
     '  FNR==1 { fidx++ }',
     '  fidx==1 { cur[$2]=1; next }',

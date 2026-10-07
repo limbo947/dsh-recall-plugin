@@ -110,6 +110,9 @@ function dirSkipSetBlock(name: string): string {
 // $root（建仓脚本不遍历工作区），if ($root) 守卫让「跳过」是显式设计，而非
 //「Push($null) → DirectoryInfo.new 抛错被 catch 吞掉」的巧合路径——三处主脚本
 // 随后在 add -A 之前重做发现，无漏检窗口。$lines 由 excludeSyncBlock 前置定义，恒可用。
+// 转义与排序（评审 P3）：发现行是机器生成的 gitignore pattern，目录名以 #/! 开头
+// 或含 [ 会被解析成注释/反选/字符组而静默漏排除（用户行是用户自负，机器行必须
+// 转义）；Sort 让 exclude 内容序与 NTFS 枚举序脱钩，避免无谓重写 + 清理循环空跑。
 function reparseDirsBlock(): string {
   return [
     dirSkipSetBlock('reparseSkip'),
@@ -124,14 +127,18 @@ function reparseDirsBlock(): string {
     '    foreach ($d in $di.EnumerateDirectories()) {',
     '      if ($reparseSkip.Contains($d.Name)) { continue }',
     '      if (($d.Attributes -band [System.IO.FileAttributes]::ReparsePoint) -ne 0) {',
-    "        $reparseRel.Add($d.FullName.Substring($root.Length + 1).Replace('\\','/') + '/')",
+    "        $rel = $d.FullName.Substring($root.Length + 1).Replace('\\','/')",
+    '        $rel = $rel -replace "\\[", "\\["',
+    '        if ($rel.StartsWith("#") -or $rel.StartsWith("!")) { $rel = "\\" + $rel }',
+    "        $reparseRel.Add($rel + '/')",
     '        continue',
     '      }',
     '      $reparseStack.Push($d.FullName)',
     '    }',
     '  } catch {}',
     '}',
-    '}'
+    '}',
+    '$reparseRel.Sort()'
   ].join('\n')
 }
 
@@ -220,7 +227,11 @@ function excludeSyncBlock(excludeFile: string, base: string[]): string {
     "if (Test-Path -LiteralPath $exFile) { $userPats = @(Get-Content -LiteralPath $exFile -Encoding UTF8 -ErrorAction SilentlyContinue | Where-Object { $t = $_.Trim(); $t -and -not $t.StartsWith('#') }) }",
     "$lines = @('') + @(" + baseList + ") + $userPats",
     reparseDirsBlock(),
-    '$lines = $lines + @($reparseRel)',
+    // 写盘顺序 base + reparse + userPats（评审 P3 逃生口）：gitignore 后写胜出，
+    // 用户行垫底才可用 !path/ 反选重纳良性 junction（指向工作区外、非自引用）；
+    // 自引用 junction 切勿反选（爆炸根因，见 reparseDirsBlock）。上方 $lines
+    //（base+userPats）先供 reparseDirsBlock 构目录名剪枝集，判据语义不变。
+    "$lines = @('') + @(" + baseList + ") + @($reparseRel) + $userPats",
     "$exc = Join-Path $g 'info\\exclude'",
     '$excOld = @(Get-Content -LiteralPath $exc -Encoding UTF8 -ErrorAction SilentlyContinue)',
     '$same = ($excOld.Count -eq $lines.Count)',
@@ -470,13 +481,24 @@ export function diffScript(root: string, store: ScriptStore, gitExe: string, tag
   ].join('\n')
 }
 
-// 回退：恢复侧走 git archive --format=zip + Expand-Archive，删除侧按
-// 清单移除「当前有、目标无」的文件。曾尝试 tar 优先（bsdtar 性能更好），
+// 回退：恢复侧按 diff 变更集走 git archive --format=zip + Expand-Archive，
+// 删除侧按清单移除「当前有、目标无」的文件。曾尝试 tar 优先（bsdtar 性能更好），
 // 实测否决：System32\bsdtar 在 GBK 活动代码页（ACP=936）机器上把 tar
 // 流里的 UTF-8 文件名按 ANSI 解码——中文文件名解包成「璇存槑.txt」式的
 // 乱码新文件，原路径反而丢失；且 tar -m 才是必需的（stat 缓存碰撞），
 // Expand-Archive 天然把 mtime 设为解包时刻，zip 链路反而更稳。
-// 空树跳过 archive（空 zip 会让 Expand-Archive 报错），只执行删除。
+// 变更集恢复（issue #22，旧版整树 archive）：旧版 $restored 是目标树全量条数，
+// 改 1 个文件也把整棵快照树打 zip 全量解压（大工作区 GB 级三遍 IO；实机
+// 39.2 万条幽灵条目时打出 5.11 GB zip），未变更文件也被 -Force 覆写、mtime
+// 全变误触发构建增量/文件监听。现按 sha 求出恢复集（目标有、当前无或内容不同，
+// 与 diffScript 的 modified+restored 同集合），git archive <tag> -- <paths>
+// 分批（100/批，与 update-index 同款纪律）只解压变更项；$restored 随之变成
+// 实际恢复条数，与 preview 的 diff 计数逐项相等（preview 的 added=本删除侧、
+// modified+restored=本恢复侧）。变更过半（restoreRel*2 ≥ targetMap）时整树
+// 一遍更优（N/100 次 archive+解压的启动开销超过单遍），回退旧路径。
+// 空恢复集跳过 archive（空 zip 会让 Expand-Archive 报错），只执行删除。
+// archive 失败显式 throw（pwsh 对 native 非零不抛，I14）——不许半回退报
+// ROLLBACK_OK（F-G2，与删除侧同纪律）。
 // 回退后保留快照 tag 与索引：git delta 空间便宜，保留历史可再次
 // 用该快照恢复（幂等），也避免误回退后无法找回。
 export function rollbackScript(root: string, store: ScriptStore, gitExe: string, tag: string, base: string[]): string {
@@ -495,18 +517,42 @@ export function rollbackScript(root: string, store: ScriptStore, gitExe: string,
     // 同 diffScript：-z 的 NUL 输出会被 PowerShell 捕获丢弃，改为逐行 + quotePath=false
     '$curOut = & $git -c core.quotePath=false --git-dir=$g --work-tree=$root ls-files --stage',
     "$targetOut = @(& $git -c core.quotePath=false --git-dir=$g ls-tree -r " + psq(tag) + " | Where-Object { -not $_.StartsWith('160000') })",
+    '$curMap = @{}',
+    'foreach ($r in @($curOut)) {',
+    '  if (-not $r) { continue }',
+    '  $tab = $r.IndexOf("`t"); $path = $r.Substring($tab + 1)',
+    '  $sha = ($r.Substring(0, $tab) -split " ")[1]',
+    '  $curMap[$path] = $sha',
+    '}',
     '$targetMap = @{}',
     'foreach ($r in @($targetOut)) {',
     '  if (-not $r) { continue }',
     '  $tab = $r.IndexOf("`t"); $path = $r.Substring($tab + 1)',
-    '  $targetMap[$path] = $true',
+    '  $sha = ($r.Substring(0, $tab) -split " ")[2]',
+    '  $targetMap[$path] = $sha',
     '}',
-    '$restored = $targetMap.Count',
+    // 恢复集 = 目标有、当前无或 sha 不同（与 diffScript 的 modified+restored 同集合）
+    '$restoreRel = [System.Collections.Generic.List[string]]::new()',
+    'foreach ($k in $targetMap.Keys) {',
+    '  if (-not $curMap.ContainsKey($k) -or $curMap[$k] -ne $targetMap[$k]) { $restoreRel.Add($k) }',
+    '}',
+    '$restored = $restoreRel.Count',
     'if ($restored -gt 0) {',
     '  $zip = ' + psq(store.dir + '\\restore-tmp.zip'),
-    '  & $git --git-dir=$g archive --format=zip --output=$zip ' + psq(tag),
-    '  Expand-Archive -LiteralPath $zip -DestinationPath $root -Force',
-    '  Remove-Item -LiteralPath $zip -Force',
+    '  if ($restoreRel.Count * 2 -ge $targetMap.Count) {',
+    '    & $git --git-dir=$g archive --format=zip --output=$zip ' + psq(tag),
+    "    if ($LASTEXITCODE -ne 0) { throw ('git archive failed (exit ' + $LASTEXITCODE + ')') }",
+    '    Expand-Archive -LiteralPath $zip -DestinationPath $root -Force',
+    '    Remove-Item -LiteralPath $zip -Force',
+    '  } else {',
+    '    for ($i = 0; $i -lt $restoreRel.Count; $i += 100) {',
+    '      $batch = $restoreRel.GetRange($i, [Math]::Min(100, $restoreRel.Count - $i))',
+    '      & $git --literal-pathspecs --git-dir=$g archive --format=zip --output=$zip ' + psq(tag) + ' -- $batch',
+    "      if ($LASTEXITCODE -ne 0) { throw ('git archive failed (exit ' + $LASTEXITCODE + ')') }",
+    '      Expand-Archive -LiteralPath $zip -DestinationPath $root -Force',
+    '      Remove-Item -LiteralPath $zip -Force',
+    '    }',
+    '  }',
     '}',
     // 删除失败语义与 POSIX 版对齐（F-G2）：本侧 EAP=Stop 下 Remove-Item
     // 失败直接抛终止错误、pwsh 以非零码退出；POSIX 侧 rm 在 set -e 的 if
