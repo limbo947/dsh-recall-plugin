@@ -7,6 +7,17 @@
 >
 > 出处标注为 2026-09-01 核验（alpha.3）；每次 dsh 升级后按「复查动作」更新本节「核验日期」。
 >
+> **2.4.10 发版核验（2026-10-07）**：插件 **2.4.10 已发布**（npm `latest`＝2.4.10、GitHub Release `v2.4.10` 已创建、
+> 非 draft/prerelease，tag `v2.4.10` 指向 `1474f46`）；发布提交两个——`df7d7cf`（fix：回退恢复侧改 diff 变更集
+> issue #22 + junction 防护评审补强 P3，含机器生成 exclude 行转义两处 JS 串反斜杠被吞的实弹修复）+ `1474f46`
+> （chore(release)：2.4.10——`[Unreleased]` 改名、版本 bump、AGENTS.md 单测文件数 37→39）。发版前门禁全绿：
+> `typecheck`、单测 **499/499**（39 文件）、`test:client` **90/90**（6 文件）、`build` 后 `lib/` 与提交逐字一致
+> （`lib/client.js` 156136 字节）、`test:probe` **52/52**、`verify:host` 装配断言全过（端点 13 项）、`check:dsh`
+> `✔ 全部一致`（本地 dsh 0.2.1-alpha.1、npm 最新 0.2.0-rc.2 无新版本）。registry 端点 `/dsh-recall-plugin/2.4.10`
+> 与 `dist-tags.latest=2.4.10` 双确认（传播延迟约 1 分钟，packument `modified=2026-10-07T11:22:53Z`，经 HTTP 轮询就绪后直下）。
+> **发布产物核验**：tarball 179.8 kB / 解包 553.4 kB，解包后 **24/24 文件与工作区逐字节 SHA256 一致**（17 个 lib
+> 产物 + package.json + CHANGELOG.md + README.md + README.en.md + cordis.patch.yml + assets/icon.svg + LICENSE）。
+>
 > **2.4.9 发版核验（2026-10-03）**：插件 **2.4.9 已发布**（npm `latest`＝2.4.9、GitHub Release `v2.4.9` 已创建、
 > 非 draft/prerelease，tag `v2.4.9` 指向 `5b21369`）；发布提交两个——`d008fb1`（feat：issue #19 撤回完成事件/回调，
 > 随 2.4.8 发布、本次补录进历史）+ `5b21369`（chore(release)：2.4.9——dsh 0.2.1-alpha.1 兼容声明，peer 窗口
