@@ -17,6 +17,11 @@
 > 与 `dist-tags.latest=2.4.10` 双确认（传播延迟约 1 分钟，packument `modified=2026-10-07T11:22:53Z`，经 HTTP 轮询就绪后直下）。
 > **发布产物核验**：tarball 179.8 kB / 解包 553.4 kB，解包后 **24/24 文件与工作区逐字节 SHA256 一致**（17 个 lib
 > 产物 + package.json + CHANGELOG.md + README.md + README.en.md + cordis.patch.yml + assets/icon.svg + LICENSE）。
+> **本机 profile 实装（装载级）验证通过**：web profile pin `2.4.9` → `2.4.10`、`minimumReleaseAgeExclude` 补
+> `2.4.10`、`pnpm install` 实装（8.8s）；`node_modules/dsh-recall-plugin` 为普通目录（npm 模式）、版本 2.4.10、
+> peer 含 0.2.1 段；新代码标记在位（`lib/scripts.pwsh.js` 含 `read-tree --empty` / `ReparsePoint` / `reparseRel.Sort()`
+> 与转义语句，`lib/scripts.posix.js` 含分批 pathspec archive）。**未做宿主启停验证**：本机 dsh web 实例运行中
+> （端口 3080），重启会打断用户会话——安装已就位，下次重启即装载 2.4.10，建议后续补一次启停冒烟。
 >
 > **2.4.9 发版核验（2026-10-03）**：插件 **2.4.9 已发布**（npm `latest`＝2.4.9、GitHub Release `v2.4.9` 已创建、
 > 非 draft/prerelease，tag `v2.4.9` 指向 `5b21369`）；发布提交两个——`d008fb1`（feat：issue #19 撤回完成事件/回调，
