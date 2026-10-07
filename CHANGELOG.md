@@ -2,6 +2,13 @@
 
 本文件格式遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循语义化版本。
 
+## [Unreleased]
+
+### 修复
+
+- **win32 目录重解析点把影子仓库索引撑爆、撤回退化为分钟级（issue #20，PR #21，外部贡献 @PrismScopes）**：git for Windows 把 NTFS junction 当普通目录，`add -A` 递归进入链接目标（`core.symlinks` 取 true / false / 默认实测同样递归，无法配置规避），自引用 junction（`a/link -> a`）按 Windows「路径中最多 31 个重解析点」上限把同一棵子树重复索引——实机病例 1.24 万条 → 39.2 万条、`.git/index` 168 MB，preview/快照/回退退化到分钟级（用户表现为「永久卡在正在计算变更」）。修法＝`excludeSyncBlock` 在 `add -A` 之前遍历目录树（不进入链接目标）把目录重解析点按相对 root 路径 + 尾斜杠并入 `info/exclude`，git 根本不进入它们；已跟踪的旧幽灵条目由既有 `ls-files -i -c` 分支一次清掉；`oversizeBlock` 同一次压栈过滤顺带剪掉重解析点。遍历只枚举目录、复用既有目录名剪枝，无重解析点的工作区不产生 exclude 差异，条件化比对跳过重写与清理循环（常态零开销）。POSIX 侧有意不做：git 把指向目录的符号链接记成 `120000` 条目、不递归进目标，照搬反而会把合法快照内容剔出快照。已知限制（README 双语已声明）：工作区内的目录重解析点一律不参与快照（含指向工作区外的良性 junction，无 `!` 反选逃生口）；POSIX bind mount 环不覆盖。维护者评审实测数据：2 真实文件 + 自引用 junction 夹具，索引 96 条（93 幽灵）→ 3 条 / 0 幽灵，`.git/index` 38 KB → 331 B；门禁 typecheck / 单测 498 / `verify:host` 全绿。
+- **大幽灵存量的首诊清理从「分钟级卡死」改整棵重建（PR #21 评审补强）**：旧清理路径对 37.9 万条幽灵条目走 `ls-files -i -c` + 每批 100 条 `update-index --force-remove`，约 3797 次 git 子进程、每次重写巨型 index（168 MB 渐缩），估 10–60 分钟——升级后第一次快照仍会表现为「卡在正在计算变更」。现按 10000 条阈值切换：`read-tree --empty` 清索引、交给随后的 `add -A` 按新 exclude 整棵重建（`gcScript` 治 issue #18 同款技巧，index 是可重建缓存），实测 1.24 万条幽灵夹具首诊 **2 秒**完成；`read-tree` 失败显式 throw（静默失败会让幽灵条目随 exclude 已重写永久滞留、清理不再触发）。重解析点遍历另加 `if ($root)` 显式守卫：`ensureGitScript` 无 `$root`，原路径靠 `Push($null)` 抛错被 `catch` 吞掉的巧合跳过，现成为显式设计（三处主脚本随后在 `add -A` 之前重做发现，无漏检窗口）。
+
 ## [2.4.9] - 2026-10-03
 
 ### 变更
