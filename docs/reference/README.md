@@ -2,9 +2,9 @@
 
 > 用途：dsh 插件开发相关官方文档的本地副本，改代码前优先查这里，避免每次联网翻文档。
 >
-> 归档日期：2026-10-03，对应 [deepseek-harness](https://github.com/deepseek-ai/deepseek-harness) 仓库 `dsh-v0.2.1-alpha.1` tag `docs/` 目录（raw.githubusercontent 按 tag 拉取；直连可用，无需代理）。
+> 归档日期：2026-10-09，对应 [deepseek-harness](https://github.com/deepseek-ai/deepseek-harness) 仓库 `dsh-v0.2.1-alpha.2` tag `docs/` 目录（raw.githubusercontent 按 tag 拉取；直连可用，无需代理）。
 >
-> 归档 dsh 版本：0.2.1-alpha.1（`npm run check:dsh` 的漂移比对基准；重拉镜像后同步更新本字段，见下方「更新方式」）
+> 归档 dsh 版本：0.2.1-alpha.2（`npm run check:dsh` 的漂移比对基准；重拉镜像后同步更新本字段，见下方「更新方式」）
 >
 > 在线站点：https://deepseek-harness.github.io/deepseek-harness/ ｜ 每份文件头部都带「来源」注释，可溯回官方原文。
 
@@ -93,3 +93,13 @@ iwr -UseBasicParsing 'https://raw.githubusercontent.com/deepseek-ai/deepseek-har
 > 表形式注册说明；13-cookbook-extension 两处链接改指 reference 新路径 + 定时任务投递改
 > `followup(…, {source: {kind: 'schedule'}})`（对应自动化任务改 Web 内置能力）。本轮直连 `raw.githubusercontent` 一次成功（首轮缺
 > 4 文件系执行环境中断，补齐后 13/13 齐），无需代理或重试。
+>
+> 2026-10-09 六次重拉（`dsh-v0.2.1-alpha.1` → `dsh-v0.2.1-alpha.2`）：13 源中 **仅 `09-architecture.md` 有实质差异、其余 12 份逐字节相同**。
+> 该份净 **+68 字节**，五处——① 删去两句冗余导语（「建议使用 agent 探索代码库」「以下是向 Cordis 树贡献内容的部分核心包」）；
+> ② patch 层语义扩写：新增「`preset` patch 在目标声明的 `config.plugins` 内应用这些操作，沿用相同的层优先级」；
+> ③ 核心包表**移除 `webhook/webhook` 行**（webhook 整族包在本版被删，与全树 diff 的「仅 alpha.1 有」清单互证）；
+> ④ AgentLoop 与轮次流程伪代码改写：「project runtime context at fallback」「reconcile retained runtime context」、
+> 「每次尝试刷新已注册运行时事实、协调绑定的提示词、仅接纳一次用户消息并恢复被移除的运行时上下文」（对应 pi-ai 路由的动态工具增删与系统提示词更新）；
+> ⑤ 新增「[工作目录](subsystems/working-directory.zh.md) 提供用户上下文和执行路径，**不改变原始项目标识、沙箱写入根目录或已有进程目录**」
+> —— 此句是本轮对撤回插件的关键澄清（工作目录切换不动写入根，影子仓库范围假设不受影响）；Agent Teams 描述改「持久 roster、任务状态和**直接 inbox 消息**协作」（对应 inbox 直投重构）。
+> 本轮直连 `raw.githubusercontent` 一次成功，13/13 齐，无需代理或重试。

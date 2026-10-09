@@ -5,7 +5,7 @@
 [![npm version](https://img.shields.io/npm/v/dsh-recall-plugin?style=flat-square&label=npm&color=3178C6)](https://www.npmjs.com/package/dsh-recall-plugin)
 [![npm downloads](https://img.shields.io/npm/dm/dsh-recall-plugin?style=flat-square&label=downloads&color=1F883D)](https://www.npmjs.com/package/dsh-recall-plugin)
 ![License](https://img.shields.io/badge/license-MIT-blue)
-[![DSH](https://img.shields.io/badge/DSH-0.2.1--alpha.1-blue)](https://github.com/deepseek-ai/deepseek-harness/releases/tag/dsh-v0.2.1-alpha.1)
+[![DSH](https://img.shields.io/badge/DSH-0.2.1--alpha.2-blue)](https://github.com/deepseek-ai/deepseek-harness/releases/tag/dsh-v0.2.1-alpha.2)
 
 在任意一条你发过的消息下方点「↶ 撤回」——**工作区文件和对话历史一起回到那条消息发出之前的状态**。
 
@@ -70,7 +70,7 @@
 
 - git CLI：未安装时撤回按钮不出现（页面顶部会提示安装 git），不影响 DSH 运行。
 - shell：Windows 上 PowerShell 5.1 / 7 均可；Linux/macOS 需 bash。
-- DSH 版本：`0.1.2-alpha.1` 至 `0.2.1-alpha.1`；已核验 minor 线内的后续版本自动放行，未核验的新 minor 线会被启动期兼容门禁拦截（开窗机制见下方折叠块）。
+- DSH 版本：`0.1.2-alpha.1` 至 `0.2.1-alpha.2`；已核验 minor 线内的后续版本自动放行，未核验的新 minor 线会被启动期兼容门禁拦截（开窗机制见下方折叠块）。
 - **0.1.7-alpha.1 是破坏性版本**（shell 执行与 settings 面接口更换），插件内置双分支共存适配：同一发布同时兼容 0.1.2–0.1.6 各线与 0.1.7+，老版本 DSH 上行为不变。
 - `0.1.1-rc.2` 及更早不支持：那条线的客户端运行时没有 `sessions`/`workspaces`/`uiWorkspace` 服务，插件 UI 会静默不渲染。
 

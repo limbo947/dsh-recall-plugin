@@ -2,7 +2,7 @@
 
 > 插件视角的官方（deepseek-harness）API 契约参考：插件**依赖面**逐项给出签名与核验状态，插件**未依赖面**给出全量清单与一句话说明。
 >
-> * 对应版本：**dsh 0.2.1-alpha.1**（tag `dsh-v0.2.1-alpha.1`，2026-10-03 发布、0.2.0 线补丁版首个 alpha；npm dist-tag `alpha` 指向本版（`latest`/`next` 仍 0.2.0-rc.2）——**装本版须显式写版本号**；`npm install -g @deepseek-ai/dsh@0.2.1-alpha.1` 全局实装（22 增 / 3 删 / 536 替换包、1 分钟）。**对插件零破坏、无需改码；peer 窗口追加 `>=0.2.1-alpha.1 <0.3.0` 段**（prerelease 门槛不进旧窗口，上限随 2.4.9 发版放宽至覆盖 0.2 全线；cordis / schemastery 各追加已验证 prerelease 段）：**全树内容级 diff**（0.2.0-rc.2 整包残留 462.3MB / 26639 文件作基线，287 子包逐包比对 + 契约文件逐行 diff）确认注册 / 消费契约（ui-chat `contract/slots.d.ts` ＋ `contract/chat-nodes.d.ts`、api-session-controller `client/contract/sessions.d.ts`（fork / binding）、ui-conversation `service.d.ts`（updateQueue）与 `contract/input.d.ts`（`setDraft` 签名）、`plugins.bundle.config` ＋ `settings.plugin.item` 双 slot）**全部字节级相同**；真增量落在插件不消费处或纯增（结构化草稿 `DraftSnapshot` / `requestDraftInitialization`、`plugins.add.actions` slot、`StatsPills` 拆分 activity / usage、invariant 导出移除、`ToolCallBlock.root` 可选化），并有**正向**两处（启停插件样式隔离修复、队列滞留修复惠及 G1）。**门禁**：`test:probe` **52/52**、`verify:host` 装配断言全过（inject=shell,sessions,agents、端点 13 项）、`check:dsh` 经 peer 追加后全绿。核验记录归口 [compat-audit.md](./compat-audit.md) 头部 0.2.1-alpha.1 段与 [upgrade-assessments/dsh-0.2.1-alpha.1.md](upgrade-assessments/dsh-0.2.1-alpha.1.md)。**沿革事实（当前双分支实现的依据）**：① 0.1.7-alpha.1 起两处接缝换代——shell 执行接缝 `resolve` + `execute()`（删 `run` / `start`；§1.1 shell）、settings 面只剩 `SettingsForms`（profile entry id、可写字段须 `.volatile()`；§1.1 settings），插件双分支共存适配；② 包布局收进 `dsh/node_modules/@deepseek-ai/*`（I11）；③ fork 实现重写（边界语义等价，I35）；④ 事件集 59 种（§四）；⑤ Session 日志格式 **V4**（保留原始 message id，插件以 id 为主键、以真实 `e.seq` 推 cutSeq，免疫）；⑥ `sessions.fork` 增加可选 `onCreated`（插件不传）。
+> * 对应版本：**dsh 0.2.1-alpha.2**（tag `dsh-v0.2.1-alpha.2`，2026-10-09 发布、0.2.1 线第二个 alpha；npm dist-tag `alpha` 指向本版（`latest`/`next` 仍 0.2.0-rc.2）——**装本版须显式写版本号**；`npm install -g @deepseek-ai/dsh@0.2.1-alpha.2` 全局实装（15 增 / 12 删 / 546 替换包、2 分钟）。**对插件零破坏、无需改码、peer 窗口无需追加**（既有 `>=0.2.1-alpha.1 <0.3.0` 同 tuple 段天然放行 alpha.2；cordis 4.0.5-alpha.1 与 schemastery 3.18.5-alpha.1 两条独立版本线本轮未动）：**全树内容级 diff**（npm 侧安装的 `0.2.1-alpha.1` 完整树 290 包作基线，逐包归一化版本号比对 → 274 包有差异 / 1156 个真内容变更文件，关键契约文件再逐行 diff）确认注册 / 消费契约（ui-chat `contract/slots.d.ts` ＋ `contract/chat-nodes.d.ts`（`ChatNodeOwnerProps` 含 `renderMessageImages` 逐字节相同）、api-session-controller `client/contract/sessions.d.ts`（fork / binding）、ui-conversation `service.d.ts`（updateQueue）与 `contract/input.d.ts`（`setDraft` 签名）、`plugins.bundle.config` ＋ `settings.plugin.item` 双 slot）**均未漂移**；真增量落在插件不消费处或纯增（`conversation.chat.flow` 渲染中间层与 reasoning body / content slot、`ChatNodeSeat` 新增 `useChatNodeBottom`/`deferCollapse`/`useGroupAction` 入参、`fork` 可选 `allowMigration`、实验性 `appendPluginRecord` / `pluginRecordOf`、`formatStatus` 迁移态字段、webserver 任意绑定地址与 TLS、agents home 解析），并有**正向**一处（新增工作目录能力在架构文档明示「不改变原始项目标识、沙箱写入根目录或已有进程目录」，影子仓库范围假设获官方确认）。**门禁**：`test:probe` **52/52**、`verify:host` 装配断言全过（inject=shell,sessions,agents、端点 13 项）、单测 499/499、client 90/90、`typecheck`、`check:dsh` 全绿。核验记录归口 [compat-audit.md](./compat-audit.md) 头部 0.2.1-alpha.2 段与 [upgrade-assessments/dsh-0.2.1-alpha.2.md](upgrade-assessments/dsh-0.2.1-alpha.2.md)。**沿革事实（当前双分支实现的依据）**：① 0.1.7-alpha.1 起两处接缝换代——shell 执行接缝 `resolve` + `execute()`（删 `run` / `start`；§1.1 shell）、settings 面只剩 `SettingsForms`（profile entry id、可写字段须 `.volatile()`；§1.1 settings），插件双分支共存适配；② 包布局收进 `dsh/node_modules/@deepseek-ai/*`（I11）；③ fork 实现重写（边界语义等价，I35）；④ 事件集（§四；alpha.2 实测 `KNOWN_SESSION_EVENT_TYPES` 59 → 60，仅新增 `working-directory/change`，零删除）；⑤ Session 日志格式 **V4**（保留原始 message id，插件以 id 为主键、以真实 `e.seq` 推 cutSeq，免疫）；⑥ `sessions.fork` 增加可选 `onCreated`（插件不传）；⑦ 0.2.1-alpha.2 起 `sessions.fork` 增加可选 `allowMigration`（仅显式 `false` 且源会话为 `migration-required` 时抛错拒绝；插件不传，保持 Host 默认）。
 >
 > * 来源：官方源码直接核验（本机构建检出在 `D:\workspace\dsh-plugin\deepseek-harness`），非文档转述——**遇字段争议一律以** **`.d.ts`/源码为准**（AGENTS.md 合规清单 #8）
 >
@@ -14,7 +14,7 @@
 
 ***
 
-## 一、插件依赖面（详细契约，0.2.1-alpha.1 核验通过）
+## 一、插件依赖面（详细契约，0.2.1-alpha.2 核验通过）
 
 ### 1.1 Host 服务（经 `inject` 声明或 `ctx.get` 获取）
 
@@ -68,12 +68,13 @@ class SessionStore {
 
 ```ts
 interface ISessions {
-  fork(opts: { sessionId: SessionId; atSeq?: number; increaseTitle?: boolean }): Promise<SessionId>
+  fork(opts: { sessionId: SessionId; atSeq?: number; increaseTitle?: boolean; onCreated?: (childId: SessionId) => void; allowMigration?: boolean }): Promise<SessionId>
   scope(id: SessionId): AgentContext | undefined
 }
 ```
 
 * fork 语义：从 `atSeq` 切出新会话；**不传** **`increaseTitle`** **避免「xxx 2」标题递增（不变量 I6）**；请求的 child-title rename 失败会在创建后抛错
+* **0.2.1-alpha.2 新增可选 `allowMigration`**：仅显式 `false` 且源会话非 live 且持久化 `formatStatus === 'migration-required'` 时抛 `SessionForkError` 拒绝（侧栏「先打开原会话」迁移提示同源）；插件不传 → 保持 Host 默认允许迁移
 
 * 归档会话仅从分组表面隐藏（I7），fork 链由插件 lineage.json 自行记录
 
@@ -265,7 +266,7 @@ interface PluginConfigViewProps { readonly view: 'summary' | 'page' }
 
 ***
 
-## 二、Client 扩展点全量清单（52 个 slot）
+## 二、Client 扩展点全量清单（54 个 slot）
 
 插件依赖 2 个（★），其余为未依赖参考。`kind` 决定注册语义：`keyed` 按键替换、`single` 全局唯一、`chain` 依次决策、`list` 有序堆叠。
 
@@ -323,6 +324,8 @@ interface PluginConfigViewProps { readonly view: 'summary' | 'page' }
 
 注：`conversation.input.model` 由 ui-conversation 声明、ui-model-selection 提供运行时；目录流是 0.1.2 拆分后的目录选择接缝。
 
+0.2.1-alpha.2 对本表新增 2 个未依赖 slot：`conversation.chat.flow`（single / session / ui-chat——有序 Chat 行与本地回声的渲染层；`conversation.view` 的 `PropsRenderSlots` 已由 `chat.node` 改指本 slot，keyed `chat.node` 贡献者注册路径不受影响）与 `conversation.chat.reasoning.body`（single / session / ui-chat——展开的思考正文，官方入口 priority 100）；另有 factory `conversation.chat.reasoning.content`（`SlotFactoryMap` / root scope，思考 Markdown 的 Content Factory）。
+
 ## 三、Host 服务全量清单（按域分组，\~75 个）
 
 ★ = 插件依赖。可选服务（`?`）可能缺席，访问前需判空。
@@ -355,9 +358,9 @@ interface PluginConfigViewProps { readonly view: 'summary' | 'page' }
 
 **client 半专用**（Host 不可见）：`connection`、`locale`、`modules`/`clientModules`、`slots`/`uiRenderer`、`layout`、`uiSession`、`uiConversation`/`conversation`、`commandUi`、`inputTriggers`、`modelDirectories`、`chatFileMentions`、`settingsSchema`/`settingsScope`、`theme`、`uiWorkspace`、`timer`（cordis-client-runner 提供，声明后可用 `ctx.timeout` 等计时动词）
 
-## 四、会话事件类型全集（59 种）
+## 四、会话事件类型全集（60 种）
 
-已知类型集合（`KNOWN_SESSION_EVENT_TYPES`，0.1.7-rc.2；`dsh-session/lib/types/known-event-types.js`，由官方 `gen-persistence-catalog` 生成；rc.1 → rc.2 该文件字节未变）：
+已知类型集合（`KNOWN_SESSION_EVENT_TYPES`，0.2.1-alpha.2；`dsh-session/lib/types/known-event-types.js`，由官方 `gen-persistence-catalog` 生成）：
 
 ```
 agent-preset/selected   agent/inbox/spliced    approval/asked      approval/decided
@@ -377,16 +380,17 @@ tool-workflow/agent-start                      tool-workflow/run-end
 tool-workflow/run-start                        tool/call           tool/ptc-dispatch(*改)
 tool/ptc-dispatch-start(*改)                   tool/result         turn/end
 turn/start              user/message           web/deepseek-search-llm-request
+working-directory/change(*新)
 workspace/changes(*新)
 ```
 
-0.1.2-alpha.1 相对 0.1.1-rc.2 新增 3 种：`model/selection`、`session-log-deepseek/delivery-accepted`、`subagent/model-selection-policy`。**0.1.3-alpha.1（Session format v2）一进一出**：移除 `assistant/chunk`（不再持久化顶层 chunk，按 attempt 聚合嵌入 `assistant/message`）、新增 log-only 的 `assistant/attempt`。**0.1.5-alpha.1（Session format v3）三处变化**：① 新增 `system/message`（系统提示词纳入消息历史，取代 `request/header` 的 `header.system` 字段）；② `tool/code-dispatch`/`tool/code-dispatch-start` 更名为 `tool/ptc-dispatch`/`tool/ptc-dispatch-start`（PTC 词汇规范化，读取侧 V2→V3 迁移会把旧 `ptc-dispatch` 重命名回 `code-dispatch` 供旧消费方，但 v3 原生写入用 `ptc-dispatch`）；③ 新增 `feedback/message-put`/`feedback/message-delete`（反馈独立提交）。**0.1.7-alpha.1（Session format v4）新增 5 种**：`deliverables/presented`、`developer/message`、`image/offload`、`subagent/catalog`、`workspace/changes`（另有 V3→V4 批量迁移工具；「部分 V3 会话缺轮次结束记录」的兼容属正向，`resolveCutSeq` 依赖的 `turn/end` 更可靠）。**对齐不改语义**——消费方按需扫描（如插件 scanCutSeq 只扫 `user/message` + `turn/end`）天然向后兼容；v3/v4 对旧日志经不可变相邻 generation 迁移，读取侧 seq 为迁移后密集重映射语义（V2→V3 会插入 `system/message` 事件并 remap seq，但保留原始 message id——插件以 id 为主键定位消息、以恢复后 seq 推导 cutSeq，坐标系与 fork 同源，不受影响）。
+0.1.2-alpha.1 相对 0.1.1-rc.2 新增 3 种：`model/selection`、`session-log-deepseek/delivery-accepted`、`subagent/model-selection-policy`。**0.1.3-alpha.1（Session format v2）一进一出**：移除 `assistant/chunk`（不再持久化顶层 chunk，按 attempt 聚合嵌入 `assistant/message`）、新增 log-only 的 `assistant/attempt`。**0.1.5-alpha.1（Session format v3）三处变化**：① 新增 `system/message`（系统提示词纳入消息历史，取代 `request/header` 的 `header.system` 字段）；② `tool/code-dispatch`/`tool/code-dispatch-start` 更名为 `tool/ptc-dispatch`/`tool/ptc-dispatch-start`（PTC 词汇规范化，读取侧 V2→V3 迁移会把旧 `ptc-dispatch` 重命名回 `code-dispatch` 供旧消费方，但 v3 原生写入用 `ptc-dispatch`）；③ 新增 `feedback/message-put`/`feedback/message-delete`（反馈独立提交）。**0.1.7-alpha.1（Session format v4）新增 5 种**：`deliverables/presented`、`developer/message`、`image/offload`、`subagent/catalog`、`workspace/changes`（另有 V3→V4 批量迁移工具；「部分 V3 会话缺轮次结束记录」的兼容属正向，`resolveCutSeq` 依赖的 `turn/end` 更可靠）。**对齐不改语义**——消费方按需扫描（如插件 scanCutSeq 只扫 `user/message` + `turn/end`）天然向后兼容；v3/v4 对旧日志经不可变相邻 generation 迁移，读取侧 seq 为迁移后密集重映射语义（V2→V3 会插入 `system/message` 事件并 remap seq，但保留原始 message id——插件以 id 为主键定位消息、以恢复后 seq 推导 cutSeq，坐标系与 fork 同源，不受影响）。**0.2.1-alpha.2 新增 1 种、零删除**：`working-directory/change`——对应新增的工作目录能力（官方架构文档同步明示其「不改变原始项目标识、沙箱写入根目录或已有进程目录」，本插件的影子仓库范围假设据此确认），`turn/end` 等快照主链事件未动。
 
-## 五、内置 Tool 包清单（19 个）
+## 五、内置 Tool 包清单（22 个）
 
-`@deepseek-ai/dsh-tool-{ask-user, bash, bash-persistent, pwsh-persistent, cordis, fs, fs-search, goal, pwsh, ralph, skill, str-replace-editor, subagent, subagent-control, jobs, todo, web, workflow, subagent-report}`
+`@deepseek-ai/dsh-tool-{ask-user, bash, bash-persistent, pwsh-persistent, cordis, fs, fs-search, goal, pwsh, ralph, skill, str-replace-editor, subagent, subagent-control, jobs, todo, web, workflow, subagent-report, terminal, working-directory, session-query}`
 
-0.1.2 变化：PTC Mode 更名自 Code Mode；PTC 的 SDK 能力只能经 `run_code` 调用（不再暴露为直接工具）。插件不注册 tool，仅受 `tool/call`、`tool/result` 事件影响（快照内容层面）。
+0.1.2 变化：PTC Mode 更名自 Code Mode；PTC 的 SDK 能力只能经 `run_code` 调用（不再暴露为直接工具）。**0.2.1-alpha.2 新增 3 个**（`terminal` / `working-directory` / `session-query`；同版 `dsh-tool-subagent` 移除 `enableRunInBackground` / `backgroundMode` 配置、改「每次委派启动 managed activation 并返回 child id」，并移除 `dsh-subagent-in-process-driver` 包）。插件不注册 tool，仅受 `tool/call`、`tool/result` 事件影响（快照内容层面）。
 
 ## 六、其他横切契约
 
@@ -407,4 +411,4 @@ workspace/changes(*新)
 3. **实弹冒烟**：中文路径工作区发消息 → 撤回（清单/文件恢复/对话回退/标题不变）→ 设置页快照管理。新 UI 机制（如 0.1.2 的 turn-process 折叠、字号调节）重点确认插件 UI 可见性与视觉协调。
 4. **台账**：核查结论对照 `docs/compat-audit.md` I1-I41 定点更新，发现失效项补「失效症状 + 复查动作」。
 
-> **版本核验记录归口**：历次版本（含最新 **0.2.1-alpha.1**，2026-10-03：零破坏、无需改码、peer 窗口追加 `>=0.2.1-alpha.1 <0.3.0` 段）的核查记录见 [compat-audit.md](./compat-audit.md) 头部核验段与 [upgrade-assessments/](./upgrade-assessments/)；本文只保留当前版本的核验状态与一直成立的事实，不堆叠历史记录。
+> **版本核验记录归口**：历次版本（含最新 **0.2.1-alpha.2**，2026-10-09：零破坏、无需改码、peer 窗口无需追加——同 tuple 段天然覆盖）的核查记录见 [compat-audit.md](./compat-audit.md) 头部核验段与 [upgrade-assessments/](./upgrade-assessments/)；本文只保留当前版本的核验状态与一直成立的事实，不堆叠历史记录。

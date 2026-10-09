@@ -7,6 +7,42 @@
 >
 > 出处标注为 2026-09-01 核验（alpha.3）；每次 dsh 升级后按「复查动作」更新本节「核验日期」。
 >
+> **0.2.1-alpha.2 核验（2026-10-09）——零破坏版本，无需改码，peer 窗口无需追加**：**npm 已发布**（dist-tag `alpha` 指向本版，
+> tag `dsh-v0.2.1-alpha.2`，2026-10-09 发布、0.2.1 线第二个 alpha；`latest`/`next` 仍 0.2.0-rc.2），
+> `npm install -g @deepseek-ai/dsh@0.2.1-alpha.2` 全局实装（15 增 / 12 删 / 546 替换包、2 分钟；cordis 4.0.5-alpha.1 与
+> schemastery 3.18.5-alpha.1 **两条独立版本线本轮未动**）。**核验方式为全树内容级 diff**：npm 侧另装 `0.2.1-alpha.1`
+> 完整树（558 包）作基线——包集合 290 → 299（移除 6 / 新增 15），274 包有差异、**1156 个真内容变更文件**、40 包纯版本号差异；
+> 关键契约文件再逐行 diff。**消费/注册契约零漂移**：ui-chat `contract/slots.d.ts` 的 **`ChatNodeOwnerProps` 定义与
+> `'conversation.chat.node'` SlotMap 声明**逐字节相同（含 `renderMessageImages` / `loadImage` / `forkAt`），`contract/chat-nodes.d.ts`
+> 与 `chat/MessageItem.d.ts` 逐字节相同；ui-conversation `service.d.ts`（`updateQueue` 声明处）与 `contract/input.d.ts`
+> （`InputActions.setDraft`）**整文件逐字节相同**；`dsh-client-modules` 的 `lib/types/index.d.ts` 逐字节相同、`dsh-client-ui-slots`
+> 整包仅 package.json（**keyed slot priority 分发机制零漂移**）。**包级零内容变化**：`dsh-agent`（除 lockstep 版本号与依赖顺序）、
+> `dsh-base` 的 `lib/`、`dsh-shell`、`dsh-settings`、`dsh-sandbox-policy`、`dsh-jobs-local`、`dsh-package-manifest`、
+> `dsh-host-plugin-inventory`、`dsh-atomic-write`、`dsh-fs-local`。**真增量（插件不消费或纯增）**：① Agent Teams inbox 直投
+> （破坏性声明，落点在 `ctx.agentTeams` 实验协作层，非插件消费面）；② 子代理统一执行——`dsh-tool-subagent` 移除
+> `enableRunInBackground` / `backgroundMode` 配置、改「每次委派启动 managed activation 并返回 child id」；
+> ③ `sessions.fork` 新增可选 `allowMigration`（实现：仅 `=== false` 且源非 live 且 `formatStatus === 'migration-required'` 时拒绝，
+> 插件不传保持 Host 默认）+ `ui-workspace.forkSession` 新增第三可选参数；④ ui-chat 新增 `conversation.chat.flow` 渲染中间层
+> （`conversation.view` 的 `PropsRenderSlots` 由 `chat.node` 改 `chat.flow`）、`conversation.chat.reasoning.body` / `.content`、
+> `ChatNodeSeat` 新增 `useChatNodeBottom` / `deferCollapse` / `useGroupAction` 入参；⑤ `formatStatus` 迁移态字段（session-query /
+> session-persistence / SessionListEntry / SessionSummary / SessionProjectionSnapshot.state 各加可选值）；
+> ⑥ `dsh-session` 新增 `appendPluginRecord` / `pluginRecordOf`（**仅官方 experimental 包可调**，第三方不可用）、
+> `SESSION_FORMAT_VERSION` 仍 4；⑦ webserver 任意绑定地址 + TLS（`Config.host` 放宽为 `string`、新增 `tls?`）；
+> ⑧ agents home 解析（`DSH_AGENTS_HOME`）；⑨ 包增删：移除 webhook 族 2 + hooks 族 3 + `dsh-subagent-in-process-driver`，
+> 新增 working-directory / tool-working-directory / tool-terminal / tool-session-query / session-title-all-prompts-llm
+> 与多个 experimental bundle。**事件集**：`KNOWN_SESSION_EVENT_TYPES` 59 → 60，仅新增 `working-directory/change`、**零删除**
+> （`user/message` / `turn/end` / `turn/start` 全在）。**正向澄清**：镜像 `09-architecture.md` 新增「工作目录提供用户上下文和执行路径，
+> **不改变原始项目标识、沙箱写入根目录或已有进程目录**」——影子仓库以工作区根为范围的前提获官方背书（13 源中仅此份变化、
+> +68 B，其余 12 份逐字节相同）。**门禁**：`test:probe` **52/52**、`verify:host` 装配断言全过（inject=shell,sessions,agents、
+> 端点 13 项）、单测 **499/499**、`test:client` **90/90**、`typecheck`、`check:dsh` **`✔ 全部一致`**（本地 0.2.1-alpha.2
+> 落在既有 peer 段 `>=0.2.1-alpha.1 <0.3.0` 内——**同 tuple 无需追加**，与 alpha.1 轮次的「跨 tuple 必须显式追加」形成对照）。
+> **台账动作**：`dshReleases` 补 `0.2.1-alpha.2: compatible`、`docs/dsh-contract.md` 与 `docs/reference/README.md` 版本字段
+> 随镜像同步。核验记录归口 [upgrade-assessments/dsh-0.2.1-alpha.2.md](./upgrade-assessments/dsh-0.2.1-alpha.2.md)。
+> **观察项（非阻塞）**：① working_directory 引入「用户上下文/执行路径」与「项目标识/沙箱写入根」的区分——若未来写入根
+> 跟随工作目录，快照范围需重评；② 若未来 Host 让 fork 默认拒绝迁移，撤回对旧格式源会话会失败——届时在 preview 读
+> `formatStatus` 给出专属提示；③ `appendPluginRecord` 有 verify gate，第三方插件不可用；④ `conversation.chat.flow` 中间层
+> 若未来要求节点贡献者迁入，keyed 注册需迁移。
+>
 > **2.4.10 发版核验（2026-10-07）**：插件 **2.4.10 已发布**（npm `latest`＝2.4.10、GitHub Release `v2.4.10` 已创建、
 > 非 draft/prerelease，tag `v2.4.10` 指向 `1474f46`）；发布提交两个——`df7d7cf`（fix：回退恢复侧改 diff 变更集
 > issue #22 + junction 防护评审补强 P3，含机器生成 exclude 行转义两处 JS 串反斜杠被吞的实弹修复）+ `1474f46`
