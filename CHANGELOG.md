@@ -2,6 +2,13 @@
 
 本文件格式遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循语义化版本。
 
+## [2.6.2] - 2026-11-03
+
+### 修复
+
+- **Windows 保留设备名不再反复触发快照跳过提示（issue #32）**：`nul`、`aux`、`con`、`prn`、`com1`…、`lpt1`… 及其扩展名和上标数字变体在 `git add` 前默认排除，覆盖任意子目录；规则仅适用于 Windows，不进入构建产物 root 判定，POSIX 合法同名文件不受影响。这些路径保持「不恢复、不删除」的既有回退语义。
+- **0 字节 `nul` 等路径的失败提示不再静默丢失**：`SNAP_SKIP` 同时识别 Git 的 `unable to index file 'X'` 与 `unable to add 'X' to index`，PowerShell 与 bash 模板均已覆盖。
+
 ## [2.6.1] - 2026-10-31
 
 ### 新增
