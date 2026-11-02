@@ -36,6 +36,15 @@ export const MAX_FILE_BYTES = 8388608
 export const STALE_LOCK_MIN = 5
 export const HEARTBEAT_TTL_S = 900
 
+// Win32 会把这些文件名（含扩展名与上标数字变体）解析成设备，git add 必然失败。
+// 仅并入 pwsh 的 info/exclude，不进共享 baseExcludes，避免触发构建产物 root 误判或误伤 POSIX。
+const WIN_RESERVED_EXCLUDES = [
+  'nul', 'nul.*', 'aux', 'aux.*', 'con', 'con.*', 'prn', 'prn.*',
+  'com[1-9]', 'com[1-9].*', 'lpt[1-9]', 'lpt[1-9].*',
+  'com¹', 'com¹.*', 'com²', 'com².*', 'com³', 'com³.*',
+  'lpt¹', 'lpt¹.*', 'lpt²', 'lpt².*', 'lpt³', 'lpt³.*',
+]
+
 // 影子仓库 info/attributes 固化内容（issue #12 字节保真，两套模板同值，
 // scripts-contract 钉）。为什么必须：回退恢复走 git archive、捕获走 add，
 // 两者都会应用「快照树里项目自己的 .gitattributes」——text=auto（极常见）
@@ -354,7 +363,8 @@ function limitScanBlock(maxBytes: number, fileMaxBytes: number, budgetMs: number
 function excludeSyncBlock(excludeFile: string, base: string[]): string {
   // 兜底含两种存储目录名：降级为 .dsh-recall-snapshots/，home 存储为
   // dsh-recall-snapshots/（root=HOME 时落入工作区，漏排除会自吞，issue #6）
-  const baseList = (Array.isArray(base) && base.length ? base : ['.git', 'node_modules/', '.dsh-recall-snapshots/', 'dsh-recall-snapshots/']).map(psq).join(',')
+  const configuredBase = Array.isArray(base) && base.length ? base : ['.git', 'node_modules/', '.dsh-recall-snapshots/', 'dsh-recall-snapshots/']
+  const baseList = [...configuredBase, ...WIN_RESERVED_EXCLUDES].map(psq).join(',')
   return [
     "$exFile = " + psq(excludeFile),
     '$userPats = @()',
@@ -541,14 +551,14 @@ export function snapshotScript(root: string, store: ScriptStore, gitExe: string,
     // native stderr 包装成 ErrorRecord，EAP=Stop 下直接抛 NativeCommandError，
     // 而 PS 5.1 的 SilentlyContinue 会把合并流里的记录整个丢弃（实测 LOG
     // 为空）——Continue 是两个版本下唯一都能拿到 stderr 文本的取值。捕获
-    // 后按 "unable to index file 'X'" 提取被跳过的路径，以 SNAP_SKIP 行
-    // 回传 JS 侧做用户可见提示。
+    // 后按 "unable to index file 'X'" / "unable to add 'X' to index" 提取
+    // 被跳过的路径，以 SNAP_SKIP 行回传 JS 侧做用户可见提示。
     "$ErrorActionPreference = 'Continue'",
     "$addLog = (@(& $git --git-dir=$g --work-tree=$root add -A --ignore-errors @paArgs 2>&1) | ForEach-Object { [string]$_ }) -join \"`n\"",
     '$addRc = $LASTEXITCODE',
     "$ErrorActionPreference = 'Stop'",
     'if ($addRc -ge 2) { throw ("git add fatal (exit " + $addRc + "): " + $addLog) }',
-    "foreach ($m in [regex]::Matches($addLog, \"unable to index file '([^']+)'\") ) { Write-Output ('SNAP_SKIP ' + $m.Groups[1].Value) }",
+    "foreach ($m in [regex]::Matches($addLog, \"unable to (?:index file|add) '([^']+)'\") ) { Write-Output ('SNAP_SKIP ' + $m.Groups[1].Value) }",
     dropGitlinksBlock(),
     // 兜底：旧 git 走裸 add 时大文件仍会被重新索引，这里按清单再清一次；
     // pathspec 生效时它是空操作（清单条目本就不在 index）

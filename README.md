@@ -74,6 +74,7 @@
 - 目标工作区的 agent 正在运行时无法发起撤回（防护设计，先停止 agent 再撤回）。
 - 支持 Windows（PowerShell 5.1/7 + git CLI）与 Linux/macOS（bash + git CLI）。Windows 真机验证充分；Linux 已在 WSL2（Ubuntu 26.04，bash 5.3 + git 2.53）实测全流程（含中文路径、home 降级、会话清理、gc）；macOS 侧脚本按 bash 3.2 兼容编写，尚未真机实测。
 - 工作区内嵌套的其他 git 仓库（子目录自带 `.git`）无法索引：其余部分快照照常（fail-open，页面会提示跳过了哪些路径），但其内容不参与回退。
+- Windows 保留设备名（如 `nul`、`aux`、`con`、`com1`，含扩展名形式）无法由 Git 索引，默认不参与快照与回退；这些路径保持原样，也不会反复产生跳过提示。此排除仅适用于 Windows。
 - 工作区内的**目录重解析点**（junction / 目录符号链接）默认不参与快照：它们指向的子树不会被索引，因此那部分内容不参与回退。win32 上这是必需的——git for Windows 把 junction 当普通目录递归，自引用 junction 会让索引膨胀到 Windows 的 31 层重解析点上限（实测 2 个文件的工作区产出 64 条索引）；POSIX 侧符号链接照常进快照（git 记成 `120000` 条目，不递归进目标）。确需把某个**良性** junction（指向工作区外、非自引用）纳入快照时，可在排除配置里追加 `!路径/`（如 `!ext-link/`）反选恢复——用户排除行在机器生成行之后生效；**切勿对自引用 junction 使用**（爆炸根因）。
 - 文件名含换行/TAB 的极端情形超出 diff 清单的解析能力（概率可忽略）。
 - **与 dsh-routing-suite（渐进式工具披露路由）的交互**：同时启用其 router-standard 预设时，撤回经 `sessions.fork` 出新会话会把路由阶段重置为默认（工具面临时收窄）。现象、成因与解决方案见 [docs/routing-interplay.md](docs/routing-interplay.md)。
@@ -199,7 +200,7 @@ peerDependencies 按 minor 版本线开窗，与 `dsh.compatibility.dshReleases`
 
 **消息旁没有「↶ 撤回」按钮？** 按概率排查：① 装完没重启 DSH 进程——重启后硬刷新页面（Ctrl+Shift+R）；② git CLI 不在 PATH——页面顶部会有安装提示；③ 该消息发送于插件启用之前——快照只在消息发送时创建，历史消息无快照；④ 该工作区被停用快照——工作区开在 `dist/`、`target/` 这类命中基础排除表目录形态的位置，或超出 `maxWorkspaceBytes` / `scanBudgetMs` 护栏，或快照前的范围统计本身失败（`git ls-files` 报错，原因见「最近错误」，10 分钟后自动重试）；最近消息上会给出恢复提示（调大上限或补充排除表后自动恢复）。
 
-**撤回后个别文件没有恢复？** 该文件不在快照里：超过 `maxFileBytes`（默认 8MB）、命中排除表，或位于嵌套 git 仓库 / win32 目录重解析点内（见「已知限制」）。撤回前确认面板的清单就是实际回退范围，以它为准。
+**撤回后个别文件没有恢复？** 该文件不在快照里：超过 `maxFileBytes`（默认 8MB）、命中排除表（含 Windows 保留设备名），或位于嵌套 git 仓库 / win32 目录重解析点内（见「已知限制」）。撤回前确认面板的清单就是实际回退范围，以它为准。
 
 **快照占用磁盘太多？** 打开「设置 → 插件配置 → 撤回插件 → 快照管理」查看各工作区占用，可「立即 gc」或按工作区 / 会话 / 单条分级删除；长期可压低 `maxSnapshotsPerWorkspace`、设置 `retentionDays`，或把大目录补进排除表。
 

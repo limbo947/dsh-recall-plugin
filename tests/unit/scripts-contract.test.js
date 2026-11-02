@@ -81,6 +81,37 @@ describe('脚本模板同名导出契约', () => {
     expect(posix.fileWriteStdinCmd('some/file.tmp')).toBe("cat > 'some/file.tmp'")
   })
 
+  it('issue #32：Windows 保留设备名进入全部 pwsh 排除链，但不污染 POSIX', () => {
+    const reserved = [
+      'nul', 'nul.*', 'aux', 'aux.*', 'con', 'con.*', 'prn', 'prn.*',
+      'com[1-9]', 'com[1-9].*', 'lpt[1-9]', 'lpt[1-9].*',
+      'com¹', 'com¹.*', 'com²', 'com².*', 'com³', 'com³.*',
+      'lpt¹', 'lpt¹.*', 'lpt²', 'lpt².*', 'lpt³', 'lpt³.*',
+    ]
+    const builds = [
+      (api) => api.ensureGitScript(FAKE_STORE, 'git-exe', []),
+      (api) => api.snapshotScript('ROOT', FAKE_STORE, 'git-exe', 'm1', []),
+      (api) => api.diffScript('ROOT', FAKE_STORE, 'git-exe', 'snap-1', []),
+      (api) => api.rollbackScript('ROOT', FAKE_STORE, 'git-exe', 'snap-1', []),
+    ]
+    // 四条链共用 excludeSyncBlock；逐链钉住可防止以后某条绕开它而让保留名重新进入 add。
+    for (const build of builds) {
+      const script = build(pwsh)
+      for (const pattern of reserved) expect(script).toContain(pwsh.psq(pattern))
+    }
+    const posixSnapshot = posix.snapshotScript('ROOT', FAKE_STORE, 'git-exe', 'm1', [])
+    for (const pattern of reserved) expect(posixSnapshot).not.toContain(posix.psq(pattern))
+  })
+
+  it('issue #32：两种可恢复 git add 错误都进入 SNAP_SKIP 提取', () => {
+    const pwshSnapshot = pwsh.snapshotScript('ROOT', FAKE_STORE, 'git-exe', 'm1', [])
+    expect(pwshSnapshot).toContain("unable to (?:index file|add) '([^']+)'")
+    const posixSnapshot = posix.snapshotScript('ROOT', FAKE_STORE, 'git-exe', 'm1', [])
+    expect(posixSnapshot).toContain("s/^error: unable to index file")
+    expect(posixSnapshot).toContain("s/^error: unable to add")
+    expect(posixSnapshot).toContain('| sort -u |')
+  })
+
   it('junction 爆炸防护：pwsh 三处脚本在 add -A 之前把目录重解析点并入排除表', () => {
     // 事实来源（win32 实测）：git for Windows 把 NTFS junction 当普通目录，add -A
     // 会递归进入链接目标——core.symlinks 取 true / false / 默认三种取值同样递归，

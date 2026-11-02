@@ -11,6 +11,7 @@ import { describe, it, expect } from 'vitest'
 import { createSnapshots } from '../../src/host/snapshots.js'
 import { createRoutesCore } from '../../src/host/routes-core.js'
 import { dirNamePatterns, buildArtifactRootSegment, buildRootNotice } from '../../src/host/exclude-patterns.js'
+import { DEFAULTS } from '../../src/host/config.js'
 import * as E from '../../src/host/errors.js'
 
 const BASE = ['.git', 'node_modules/', '.dsh-recall-snapshots/', 'dsh-recall-snapshots/', 'target/', 'dist/', 'build/', '*.exe', '*.zip']
@@ -37,6 +38,12 @@ describe('排除表目录形态判据', () => {
     expect(buildArtifactRootSegment('C:\\', BASE, true)).toBeNull()
     expect(buildArtifactRootSegment('D:\\ws\\target', [], true)).toBeNull()   // 判定表为空即不拦
     expect(buildArtifactRootSegment(null, BASE, true)).toBeNull()
+  })
+
+  it('issue #32：保留设备名只在 pwsh 排除层，不触发构建产物 root 停用', () => {
+    // 裸名一旦混入共享默认表会被 dirNamePatterns 当目录项，整个工作区都会失去快照。
+    expect(buildArtifactRootSegment('D:\\projects\\nul\\app', DEFAULTS.baseExcludes, true)).toBeNull()
+    expect(buildArtifactRootSegment('/home/u/con/proj', DEFAULTS.baseExcludes, false)).toBeNull()
   })
 
   it('win32 大小写不敏感、POSIX 敏感（返回排除表原始写法供文案展示）', () => {

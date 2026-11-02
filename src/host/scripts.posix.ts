@@ -414,7 +414,7 @@ export function snapshotScript(root: string, store: ScriptStore, gitExe: string,
     'addrc=0',
     'add_log=$("$git" --git-dir="$g" --work-tree="$root" add -A --ignore-errors "${pa_args[@]}" 2>&1) || addrc=$?',
     'if [ "$addrc" -ge 2 ]; then printf \'%s\\n\' "$add_log" >&2; exit "$addrc"; fi',
-    "printf '%s\\n' \"$add_log\" | sed -n \"s/^error: unable to index file '\\(.*\\)'$/\\1/p\" | sort -u | while IFS= read -r sk; do",
+    "printf '%s\\n' \"$add_log\" | sed -n -e \"s/^error: unable to index file '\\(.*\\)'$/\\1/p\" -e \"s/^error: unable to add '\\(.*\\)' to index$/\\1/p\" | sort -u | while IFS= read -r sk; do",
     // 循环体用 if/fi 而非 && 列表：&& 列表条件为假时整条管道退出码为 1，
     // set -e 会把脚本杀掉（if 语句天然豁免）
     '  if [ -n "$sk" ]; then printf \'SNAP_SKIP %s\\n\' "$sk"; fi',
