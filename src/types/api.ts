@@ -78,6 +78,13 @@ export interface DiffChange {
   kind: string
   rel: string
 }
+// 全量分类计数：changes 会被截断到上限（默认 500 条），摘要若按清单统计
+// 就会与 total 矛盾。null = 计数不可信（旧 Host 截断输出），client 隐去摘要。
+export interface DiffCounts {
+  modified: number
+  restored: number
+  added: number
+}
 export interface PreviewOk {
   ok: true
   changes: DiffChange[]
@@ -87,6 +94,7 @@ export interface PreviewOk {
   time: number | null
   root: string | null
   cutSeq: number | null
+  counts?: DiffCounts | null
   // issue #31：false = 本条没有文件树，changes 恒为空且 execute 会强制
   // session-only；client 据此隐藏范围单选（老 Host 无该字段按 true）
   files?: boolean

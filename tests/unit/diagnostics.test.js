@@ -62,6 +62,14 @@ describe('classifyEnvError（纯函数）', () => {
     expect(classifyEnvError("Unable to create '/x/index.lock': Permission denied")).toBe('permission')
   })
 
+  it('pathTooLong：git 的 ENAMETOOLONG 与 PS 拉起 native 失败的措辞都命中', () => {
+    // 三份样本都来自真实探针：工作区根 ≥260 字符时，git 报 Invalid path，
+    // PS5.1 在 Set-Location 之后拉起 git 报 directory name is invalid
+    expect(classifyEnvError("fatal: Invalid path 'C:/tmp/w01/w02': Filename too long")).toBe('pathTooLong')
+    expect(classifyEnvError('Program \'git.exe\' failed to run: The directory name is invalid')).toBe('pathTooLong')
+    expect(classifyEnvError('PathTooLongException: The specified path is too long')).toBe('pathTooLong')
+  })
+
   it('未识别 → null', () => {
     expect(classifyEnvError('')).toBe(null)
     expect(classifyEnvError(null)).toBe(null)
@@ -70,8 +78,8 @@ describe('classifyEnvError（纯函数）', () => {
 })
 
 describe('ENV_HINTS / buildFeedbackError', () => {
-  it('五种 kind 的提示齐备、≤140 且不嵌路径', () => {
-    for (const kind of ['git', 'space', 'permission', 'lock', 'mkdir']) {
+  it('六种 kind 的提示齐备、≤140 且不嵌路径', () => {
+    for (const kind of ['git', 'space', 'permission', 'lock', 'mkdir', 'pathTooLong']) {
       const hint = ENV_HINTS[kind]
       expect(hint, kind + ' 提示缺失').toBeTruthy()
       expect(hint.length, kind + ' 提示超 140（toast 会被截断）').toBeLessThanOrEqual(140)

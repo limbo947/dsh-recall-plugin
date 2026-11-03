@@ -7,12 +7,14 @@
  * 文案必须按实际模式渲染，而不是按组件态的选择。
  */
 
-import type { DiffChange, RecallScope } from '../types/api.js'
+import type { DiffChange, DiffCounts, RecallScope } from '../types/api.js'
 
 export type RecallStage =
   | { stage: 'idle' }
   | { stage: 'loading' }
   | { stage: 'error'; message: string }
-  | { stage: 'confirm'; changes: DiffChange[]; total: number; truncated: boolean; treeId: string | null; time: number | null; cutSeq: number | null; files?: boolean }
+  // counts 是 Host 在全量清单上算的分类数（changes 已截断，不能拿来统计）；
+  // null/缺省 = 计数不可信，面板隐去摘要
+  | { stage: 'confirm'; changes: DiffChange[]; total: number; truncated: boolean; treeId: string | null; time: number | null; cutSeq: number | null; counts?: DiffCounts | null; files?: boolean }
   | { stage: 'executing'; changes: DiffChange[]; scope?: RecallScope }
   | { stage: 'done'; count: number; chatReverted: boolean; chatError: string; scope?: RecallScope }

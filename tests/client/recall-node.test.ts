@@ -10,7 +10,7 @@
 import * as React from 'react'
 import { describe, it, expect, afterEach } from 'vitest'
 import { buildRecallNode } from '../../src/client/recall-node.js'
-import { makeUtil, makeCtx, stubFetch, stubSessions, stubWorkspaces, stubUiWorkspace, renderIntoDocument, q, qa, first, click, chatNode, flush, spyLogger } from './helpers.js'
+import { makeUtil, makeCtx, stubFetch, stubSessions, stubWorkspaces, stubUiWorkspace, renderIntoDocument, q, qa, first, click, chatNode, flush, spyLogger, text } from './helpers.js'
 
 const PREVIEW_OK = {
   ok: true,
@@ -144,6 +144,34 @@ describe('撤回节点：preview 与确认面板', () => {
     await click(actionButtons(plain.container)[1])
     await flush()
     expect(qa(plain.container, '.dsh-recall-panel-note').length).toBe(2)
+  })
+
+  it('截断时摘要用 Host 的全量 counts，不按返回的清单统计', async () => {
+    // 回归事故：3054 条变更只报「修改 448」——清单被截断到 500 条，摘要却
+    // 数了这 500 条。这里清单只有 2 条、计数是全量，摘要必须跟着计数走
+    const preview = Object.assign({}, PREVIEW_OK, {
+      truncated: true,
+      total: 3054,
+      counts: { modified: 3002, restored: 50, added: 2 },
+    })
+    const m = await mount({ routes: { preview } })
+    await click(actionButtons(m.container)[1])
+    await flush()
+
+    expect(m.container.textContent).toContain('3002')
+    expect(m.container.textContent).toContain('3054')
+  })
+
+  it('截断但 Host 未下发 counts → 不出摘要（宁缺也不错数）', async () => {
+    const preview = Object.assign({}, PREVIEW_OK, { truncated: true, total: 900 })
+    const m = await mount({ routes: { preview } })
+    await click(actionButtons(m.container)[1])
+    await flush()
+
+    // 只看首段（回退时间 + 文件总数 + 摘要）：清单里的 kind 徽章不算
+    const lead = text(q(m.container, '.dsh-recall-panel-note'))
+    expect(lead).toContain('900')
+    expect(lead).not.toContain('modified')
   })
 
   it('preview 失败（ok:false）→ 错误面板（关闭按钮 + host 载荷原文）', async () => {

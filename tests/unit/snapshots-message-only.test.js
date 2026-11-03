@@ -116,7 +116,7 @@ describe('messageOnly 捕获短路径（issue #31）', () => {
 
     const diff = await snaps.diffFor('m4')
 
-    expect(diff).toEqual({ changes: [], total: 0, truncated: false, treeId: null })
+    expect(diff).toEqual({ changes: [], total: 0, truncated: false, treeId: null, counts: { modified: 0, restored: 0, added: 0 } })
     expect(calls.runShell).toBe(before)
   })
 

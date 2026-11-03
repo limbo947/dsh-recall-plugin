@@ -129,7 +129,7 @@ export function createRoutesCore(deps: RoutesCoreDeps) {
       // 透传回 execute——Host 与安全快照指纹比对即可判定「预览后文件是否
       // 变化」，省掉 execute 侧整条重复 diff。旧版 Client 不认识该字段，
       // 无值时 execute 退回 previewTotal 校验（向后兼容）。
-      return { ok: true, changes: result.changes, total: result.total, truncated: result.truncated, treeId: result.treeId || null, time: snap2 ? snap2.time : null, root: snap2 ? snap2.root : null, cutSeq, files: snap2 ? snap2.files !== false : undefined }
+      return { ok: true, changes: result.changes, total: result.total, truncated: result.truncated, treeId: result.treeId || null, time: snap2 ? snap2.time : null, root: snap2 ? snap2.root : null, cutSeq, counts: result.counts, files: snap2 ? snap2.files !== false : undefined }
     },
 
     'execute': async (args: ExecuteArgs): Promise<ExecuteResponse> => {

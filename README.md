@@ -75,6 +75,7 @@
 - 支持 Windows（PowerShell 5.1/7 + git CLI）与 Linux/macOS（bash + git CLI）。Windows 真机验证充分；Linux 已在 WSL2（Ubuntu 26.04，bash 5.3 + git 2.53）实测全流程（含中文路径、home 降级、会话清理、gc）；macOS 侧脚本按 bash 3.2 兼容编写，尚未真机实测。
 - 工作区内嵌套的其他 git 仓库（子目录自带 `.git`）无法索引：其余部分快照照常（fail-open，页面会提示跳过了哪些路径），但其内容不参与回退。
 - Windows 保留设备名（如 `nul`、`aux`、`con`、`com1`，含扩展名形式）无法由 Git 索引，默认不参与快照与回退；这些路径保持原样，也不会反复产生跳过提示。此排除仅适用于 Windows。
+- **工作区根路径自身超过 260 字符**时不支持撤回：这是 Windows `MAX_PATH` 的硬限制——git 拒绝索引这类目录（`\\?\` 扩展路径只能救工作区**内部**的深文件，救不了根前缀本身；实测根长 259 字符起就失败）。这种工作区的快照会失败，「最近错误」里提示把项目移到更短的路径。工作区内的深文件（根短、文件路径超 260）不受影响，照常快照与回退。
 - 工作区内的**目录重解析点**（junction / 目录符号链接）默认不参与快照：它们指向的子树不会被索引，因此那部分内容不参与回退。win32 上这是必需的——git for Windows 把 junction 当普通目录递归，自引用 junction 会让索引膨胀到 Windows 的 31 层重解析点上限（实测 2 个文件的工作区产出 64 条索引）；POSIX 侧符号链接照常进快照（git 记成 `120000` 条目，不递归进目标）。确需把某个**良性** junction（指向工作区外、非自引用）纳入快照时，可在排除配置里追加 `!路径/`（如 `!ext-link/`）反选恢复——用户排除行在机器生成行之后生效；**切勿对自引用 junction 使用**（爆炸根因）。
 - 文件名含换行/TAB 的极端情形超出 diff 清单的解析能力（概率可忽略）。
 - **与 dsh-routing-suite（渐进式工具披露路由）的交互**：同时启用其 router-standard 预设时，撤回经 `sessions.fork` 出新会话会把路由阶段重置为默认（工具面临时收窄）。现象、成因与解决方案见 [docs/routing-interplay.md](docs/routing-interplay.md)。
@@ -207,6 +208,8 @@ peerDependencies 按 minor 版本线开窗，与 `dsh.compatibility.dshReleases`
 **如何彻底删除全部快照数据？** 卸载插件后手动删除 home 下 `dsh-recall-snapshots/`（即 `$DSH_HOME/dsh-recall-snapshots/`，未设置时为 `~/.dsh/dsh-recall-snapshots/`）；曾降级存储的工作区另删项目内 `.dsh-recall-snapshots/`。
 
 **会话第一条消息能撤回或编辑吗？** 文件可以回退，对话不能——fork 需要该消息之前的 turn 边界；「编辑并重发」对首条消息会被明确拒绝（原消息还在，补发即成重复消息）。
+
+**撤回后会话列表多出一个会话，能不能不新建？** 不能，这是平台能力边界而非配置项：DSH 提供的「回到某条消息之前」唯一通道是 `sessions.fork`，fork 必然产生新会话——客户端会话面只有 fork / open / list / binding，没有删除或就地截断会话的动词。插件能控制的是**原会话**的去留（`archiveOriginal`，默认归档到「已归档」、可恢复），不是「是否新建」。若你说的「分支」指的是 git 分支：插件从不创建分支，快照只打 `snap-<消息ID>` tag，不碰项目自身的 git 状态。
 
 ## 工作原理
 

@@ -120,9 +120,15 @@ export function buildRecallNode(
     if (recall.stage === 'confirm') {
       const changes = recall.changes || []
       const total = typeof recall.total === 'number' ? recall.total : changes.length
-      const counts: ChangeCounts = { modified: 0, restored: 0, added: 0 }
-      for (const c of changes) {
-        if (c && isChangeKind(c.kind)) counts[c.kind]++
+      // 摘要一律用 Host 的全量计数：changes 截断到 500 条，按它统计会与 total
+      // 打架（实测 3054 条只报「修改 448」）。计数缺失且清单被截断时宁可不
+      // 出摘要也不出错数；未截断（旧 Host/小工作区）时本地统计等价
+      let counts: ChangeCounts | null = recall.counts || null
+      if (!counts && !recall.truncated) {
+        counts = { modified: 0, restored: 0, added: 0 }
+        for (const c of changes) {
+          if (c && isChangeKind(c.kind)) counts[c.kind]++
+        }
       }
       const rows: Array<ReturnType<typeof React.createElement>> = changes.map((c: DiffChange, i: number) => {
         const info = KIND_INFO[c.kind as ChangeKind]
@@ -146,7 +152,7 @@ export function buildRecallNode(
       }
       // both 首段按「有时间 / 无时间」「有摘要 / 无摘要」四个分叉组合：模板各自
       // 成句（英文语序与括号标点都和中文不同），不在渲染里拼中文句子骨架
-      const summary = summaryText(counts, t)
+      const summary = counts ? summaryText(counts, t) : ''
       const rollbackLead = recall.time
         ? t('recall.confirm.rollbackAt', { time: clockText(recall.time) })
         : t('recall.confirm.rollbackNoTime')
@@ -692,6 +698,8 @@ export function buildRecallNode(
           treeId: res.treeId || null,
           time: res.time || null,
           cutSeq: typeof res.cutSeq === 'number' ? res.cutSeq : null,
+          // 全量分类计数（changes 是截断后的清单，不能拿来统计）
+          counts: res.counts || null,
           // issue #31：仅消息条目没有文件树（老 Host 无该字段 → 按 true）
           files: res.files !== false
         })
@@ -783,6 +791,7 @@ export function buildRecallNode(
                 treeId: res2.treeId || null,
                 time: res2.time || null,
                 cutSeq: typeof res2.cutSeq === 'number' ? res2.cutSeq : null,
+                counts: res2.counts || null,
                 files: res2.files !== false
               })
             }).catch((error) => {

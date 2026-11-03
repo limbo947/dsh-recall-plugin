@@ -76,6 +76,58 @@ describe('parseDiffOutput（win32 协议：TOTAL + JSON + TREE）', () => {
   })
 })
 
+describe('parseDiffOutput（分类计数：全量口径，不按截断后的清单统计）', () => {
+  const head = Array.from({ length: 4 }, (_, i) => ({ kind: 'modified', rel: 'f' + i }))
+
+  it('采信 COUNTS 行：截断清单只回传前 4 条，计数仍覆盖 3054 条', () => {
+    const r = parseDiffOutput('COUNTS 3002 50 2\nTOTAL 3054\n' + JSON.stringify(head) + '\nTREE t\n', true, 500)
+    expect(r.changes.length).toBe(4)
+    expect(r.total).toBe(3054)
+    expect(r.truncated).toBe(true)
+    expect(r.counts).toEqual({ modified: 3002, restored: 50, added: 2 })
+  })
+
+  it('截断且无 COUNTS：counts 为 null（宁可不出摘要也不出错数）', () => {
+    const r = parseDiffOutput('TOTAL 900\n' + JSON.stringify(head) + '\nTREE t\n', true, 500)
+    expect(r.truncated).toBe(true)
+    expect(r.counts).toBe(null)
+  })
+
+  it('未截断且无 COUNTS：按清单本地统计（POSIX 全量输出与旧脚本同路）', () => {
+    const r = parseDiffOutput('TOTAL 3\n' + JSON.stringify([
+      { kind: 'modified', rel: 'a' },
+      { kind: 'restored', rel: 'b' },
+      { kind: 'added', rel: 'c' },
+    ]) + '\nTREE t\n', true, 500)
+    expect(r.counts).toEqual({ modified: 1, restored: 1, added: 1 })
+  })
+
+  it('COUNTS 行损坏（段数/数值不合法）按缺席处理', () => {
+    const r1 = parseDiffOutput('COUNTS 1 2\nTOTAL 900\n' + JSON.stringify(head) + '\nTREE t\n', true, 500)
+    expect(r1.counts).toBe(null)
+    const r2 = parseDiffOutput('COUNTS 1 x 3\nTOTAL 900\n' + JSON.stringify(head) + '\nTREE t\n', true, 500)
+    expect(r2.counts).toBe(null)
+    // 未截断时仍可退回本地统计
+    const r3 = parseDiffOutput('COUNTS -1 2 3\nTOTAL 4\n' + JSON.stringify(head) + '\nTREE t\n', true, 500)
+    expect(r3.counts).toEqual({ modified: 4, restored: 0, added: 0 })
+  })
+
+  it('POSIX 全量 TSV：counts 由清单统计得出', () => {
+    const r = parseDiffOutput('modified\ta\nrestored\tb\nrestored\tc\nTREE abc\n', false, 500)
+    expect(r.counts).toEqual({ modified: 1, restored: 2, added: 0 })
+  })
+
+  it('POSIX 清单超过 maxChanges：JS 侧截断但计数仍覆盖全量', () => {
+    // POSIX 脚本不截断，截断只发生在 JS 侧——解析到的就是全量，可放心统计
+    const lines = Array.from({ length: 600 }, (_, i) => 'modified\tf' + i).join('\n')
+    const r = parseDiffOutput(lines + '\nTREE t\n', false, 500)
+    expect(r.changes.length).toBe(500)
+    expect(r.total).toBe(600)
+    expect(r.truncated).toBe(true)
+    expect(r.counts).toEqual({ modified: 600, restored: 0, added: 0 })
+  })
+})
+
 describe('parseDiffOutput（posix 协议：TSV + 末行 TREE）', () => {
   it('TSV 逐行解析，TREE 行不混入数据，total=解析条数', () => {
     const r = parseDiffOutput('modified\ta.ts\nrestored\tb.ts\nTREE abc\n', false, 500)

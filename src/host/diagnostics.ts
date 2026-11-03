@@ -19,7 +19,7 @@
 // 顺手统一（若把 unknown 塞进 EnvErrorKind，ENV_HINTS 的 Record 缺键即编译
 // 报错，这正是拆联合的动机）。types/payloads.ts 与 types/state.ts 从本处
 // import type 引用。
-export type EnvErrorKind = 'git' | 'space' | 'permission' | 'lock' | 'mkdir'
+export type EnvErrorKind = 'git' | 'space' | 'permission' | 'lock' | 'mkdir' | 'pathTooLong'
 // workspaceLimit（issue #24）不是环境失败而是设计性停用：工作区纳入总量或
 // 扫描耗时超过护栏，快照被整体跳过。单列成员让客户端能按 kind 走提示分支，
 // 不污染 EnvErrorKind（后者驱动 ENV_HINTS 的 Record 完整性）。
@@ -33,6 +33,10 @@ export type FeedbackKind = EnvErrorKind | 'unknown' | 'workspaceLimit' | 'scanFa
 // 正则，覆盖 git 两平台措辞（POSIX `command not found` / win32 `not
 // recognized`）与常见 errno 文本。
 const ENV_PATTERNS: Array<[EnvErrorKind, RegExp[]]> = [
+  // pathTooLong 排最前：它既不是 git 缺失也不是权限问题，是 Windows 的
+  // MAX_PATH 硬限制（工作区根 ≥260 字符时 git 直接拒绝索引，实测 259 已
+  // 报 "must be run in a work tree"）。混进其他分类只会把人引去装 git
+  ['pathTooLong', [/filename too long/i, /directory name is invalid/i, /path (?:is )?too long/i]],
   ['git', [/command not found/i, /not recognized/i, /git: not found/i, /is not a git command/i]],
   ['space', [/no space left on device/i, /disk quota exceeded/i, /enospc/i]],
   ['permission', [/permission denied/i, /operation not permitted/i, /not permitted/i, /access is denied/i]],
@@ -50,6 +54,9 @@ export const ENV_HINTS: Record<EnvErrorKind, string> = {
   permission: '快照目录无写入权限：请检查目录权限后重试',
   lock: '疑似多个 DSH 实例并发使用同一快照库：请确认只启动了一个；确认后仍失败时，按「设置 · 插件配置 · 最近错误」中的路径删除锁文件',
   mkdir: '快照存储目录被同名文件占用：处理后自动恢复',
+  // 实测边界：Windows 上工作区根 ≥260 字符时 git 拒绝索引（\\?\ 前缀只救
+  // 工作区内的深文件，救不了根前缀本身），插件无法绕过——只能请用户挪路径
+  pathTooLong: '工作区路径超过 Windows 260 字符上限，git 无法索引：请把项目移到更短的路径后重试',
 }
 
 // 环境错误分类：命中返回 kind，未命中返回 null（未识别错误保现状回落

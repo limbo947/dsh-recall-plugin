@@ -52,6 +52,8 @@ function expectOk(res) {
 function makeFixture(files) {
   const base = fs.mkdtempSync(path.join(os.tmpdir(), 'recall-rollback-'))
   dirs.push(base)
+  // 夹具的 root 必须保持短：git 对工作区根自身 ≥260 字符的目录一律拒绝索引
+  // （Windows MAX_PATH 硬限制，实测 259 起就失败），这类工作区不支持撤回
   const root = path.join(base, 'root')
   const dir = path.join(base, 'store')
   fs.mkdirSync(root, { recursive: true })

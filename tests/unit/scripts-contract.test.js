@@ -460,6 +460,19 @@ describe('关键模板结构断言', () => {
     expect(posix.diffScript('ROOT', FAKE_STORE, 'git-exe', 'snap-1', [])).not.toContain('TOTAL')
   })
 
+  it('COUNTS 行输出在截断之前（分类计数必须是全量口径）', () => {
+    const s = pwsh.diffScript('ROOT', FAKE_STORE, 'git-exe', 'snap-1', [], 300)
+    expect(s, 'pwsh diffScript 缺 COUNTS 输出').toContain("Write-Output ('COUNTS ' + $nMod + ' ' + $nRes + ' ' + $nAdd)")
+    // 计数器在各桶的入库处自增：三个 kind 都要有，漏一个就与 total 对不上
+    expect(s).toContain('$result += [pscustomobject]@{ rel = $k; kind = "added" }; $nAdd++')
+    expect(s).toContain('$result += [pscustomobject]@{ rel = $k; kind = "modified" }; $nMod++')
+    expect(s).toContain('$result += [pscustomobject]@{ rel = $k; kind = "restored" }; $nRes++')
+    // COUNTS 行必须早于 TOTAL 行（TOTAL 之后就是截断后的 JSON，无从统计）
+    expect(s.indexOf("'COUNTS '")).toBeLessThan(s.indexOf("'TOTAL '"))
+    // POSIX 侧不输出 COUNTS：TSV 全量在 JS 侧统计，无需脚本再算一遍
+    expect(posix.diffScript('ROOT', FAKE_STORE, 'git-exe', 'snap-1', [])).not.toContain('COUNTS')
+  })
+
   it('PF-3：pwsh 全量枚举换 .NET 手动栈遍历（Get-ChildItem -Recurse 退役）', () => {
     // PS 5.1 可用的 .NET 4.x 没有 AllDirectories 的 SkipUnavailable——必须
     // 手动 Stack 逐目录 try/catch 才能与 SilentlyContinue 的逐项容错对齐

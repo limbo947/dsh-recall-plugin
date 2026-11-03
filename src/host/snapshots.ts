@@ -132,24 +132,54 @@ export function parseTreeId(out: unknown): string | null {
 }
 
 // PF-1：diff 输出统一解析。脚本侧协议（见 scripts.*.js diffScript 注释）：
-// win32 输出「TOTAL <n>」/「前 maxChanges 条 JSON」/「TREE <hash>」三段；
+// win32 输出「COUNTS m r a」/「TOTAL <n>」/「前 maxChanges 条 JSON」/「TREE」；
 // POSIX 输出 TSV 逐行 + 末行「TREE <hash>」。标记行必须先剥离再交给
 // parseChanges——win32 分支对整段文本 JSON.parse，标记行混入直接抛错。
 // total 语义不变（全量条数）：win32 由 TOTAL 行回传（截断前移脚本侧），
 // POSIX 无 TOTAL 行则取解析条数（不截断）。treeId 为 index 树指纹。
+// counts 必须覆盖全量：清单截断到 maxChanges 条，按清单统计的分类数会与
+// total 打架（实测 3054 条只报「修改 448」）。拿不到可信全量计数时置 null，
+// 面板据 null 隐去摘要——比展示一个错数字更诚实。
+export interface DiffCounts {
+  modified: number
+  restored: number
+  added: number
+}
 export interface DiffResult {
   changes: DiffChange[]
   total: number
   truncated: boolean
   treeId: string | null
+  counts: DiffCounts | null
+}
+function countChanges(list: DiffChange[]): DiffCounts {
+  const counts: DiffCounts = { modified: 0, restored: 0, added: 0 }
+  for (const c of list) {
+    if (c && Object.prototype.hasOwnProperty.call(counts, String(c.kind))) counts[c.kind as keyof DiffCounts]++
+  }
+  return counts
+}
+// COUNTS 行的三段必须都是非负整数才采信：任一损坏即视为缺席，避免把半截
+// 输出当计数（进而与 total 对不上）
+function parseCounts(line: string): DiffCounts | null {
+  const parts = line.trim().split(/\s+/)
+  if (parts.length !== 3) return null
+  const m = parseInt(parts[0] ?? '', 10)
+  const r = parseInt(parts[1] ?? '', 10)
+  const a = parseInt(parts[2] ?? '', 10)
+  if (!Number.isFinite(m) || !Number.isFinite(r) || !Number.isFinite(a)) return null
+  if (m < 0 || r < 0 || a < 0) return null
+  return { modified: m, restored: r, added: a }
 }
 export function parseDiffOutput(text: string, isWin: boolean, maxChanges: number): DiffResult {
   const lines = String(text || '').split(/\r?\n/)
   let total: number | null = null
   let treeId: string | null = null
+  let counts: DiffCounts | null = null
   const body: string[] = []
   for (const line of lines) {
     if (line.indexOf('TREE ') === 0) { treeId = line.slice(5).trim() || null; continue }
+    if (line.indexOf('COUNTS ') === 0) { counts = parseCounts(line.slice(7)); continue }
     if (line.indexOf('TOTAL ') === 0) {
       const n = parseInt(line.slice(6), 10)
       if (Number.isFinite(n) && n >= 0) total = n
@@ -161,7 +191,11 @@ export function parseDiffOutput(text: string, isWin: boolean, maxChanges: number
   const all = raw ? parseChanges(raw, isWin) : []
   const finalTotal = total !== null ? total : all.length
   const changes = all.slice(0, maxChanges)
-  return { changes, total: finalTotal, truncated: finalTotal > changes.length, treeId }
+  const truncated = finalTotal > changes.length
+  // 解析到的条数覆盖 total ⇒ 本地统计等价全量（POSIX 从不截断、win32 未超限）；
+  // 覆盖不了（win32 脚本侧已截断）就只有 COUNTS 行可信，缺席即 null
+  const complete = all.length >= finalTotal
+  return { changes, total: finalTotal, truncated, treeId, counts: counts || (complete ? countChanges(all) : null) }
 }
 
 // 扫描结果的完整形态：cut 为切点 seq，found 为事件序列里是否存在该消息。
@@ -959,14 +993,14 @@ export function createSnapshots(ctx: HostContext, rt: Runtime, config: ResolvedC
     const snap = state.snapshots.get(String(messageId))
     if (!snap) return null
     // issue #31：仅消息条目没有 tag，跑 diffScript 只会失败——直接空清单
-    if (snap.files === false) return { changes: [], total: 0, truncated: false, treeId: null }
+    if (snap.files === false) return { changes: [], total: 0, truncated: false, treeId: null, counts: { modified: 0, restored: 0, added: 0 } }
     const store = state.stores.get(snap.root)
     if (!store) return null
     // 8MB 上限：按平均每条 60 字节估算可容纳十余万条，正常项目远够；
     // 真超限时报错文案与「JSON 半截解析失败」的真实原因脱节，需显式检测
     const text = S.stripBom(await rt.runShell(S.diffScript(snap.root, store, state.gitExe || '', 'snap-' + messageId, BASE(), MAX_CHANGES), { timeoutMs: 600000, stdoutMaxBytes: 8388608 }))
     const trimmed = text.trim()
-    if (!trimmed) return { changes: [], total: 0, truncated: false, treeId: null }
+    if (!trimmed) return { changes: [], total: 0, truncated: false, treeId: null, counts: { modified: 0, restored: 0, added: 0 } }
     // PF-1：解析下沉到 parseDiffOutput（标记行剥离 + 截断 + 树指纹），纯函数单测钉住
     return parseDiffOutput(trimmed, rt.isWin, MAX_CHANGES)
   }
