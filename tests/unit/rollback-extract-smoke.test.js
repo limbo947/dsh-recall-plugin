@@ -190,7 +190,9 @@ describe.skipIf(!AVAILABLE)('Windows rollback 解压真执行（PS5.1）', () =>
   }, 30000)
 
   it('超长路径可重建缺失文件并删除只读新增文件', () => {
-    const segments = Array.from({ length: 20 }, (_, i) => `d${String(i + 1).padStart(2, '0')}xxxxxxx`)
+    // 22 段而非 20：%TEMP% 短的环境下（如 C:\Windows\Temp）20 段只有 262 字符，
+    // 贴着断言门槛；多两段换来稳定余量
+    const segments = Array.from({ length: 22 }, (_, i) => `d${String(i + 1).padStart(2, '0')}xxxxxxx`)
     const longDir = segments.join('/')
     const targetRel = `${longDir}/target.txt`
     const extraRel = `${longDir}/extra.txt`
@@ -212,7 +214,7 @@ describe.skipIf(!AVAILABLE)('Windows rollback 解压真执行（PS5.1）', () =>
   }, 30000)
 
   it('超长路径已存在文件按目标内容覆盖', () => {
-    const longDir = Array.from({ length: 20 }, (_, i) => `d${String(i + 1).padStart(2, '0')}xxxxxxx`).join('/')
+    const longDir = Array.from({ length: 22 }, (_, i) => `d${String(i + 1).padStart(2, '0')}xxxxxxx`).join('/')
     const targetRel = `${longDir}/target.txt`
     const fixture = makeFixture({ [targetRel]: 'before', 'a.txt': 'a', 'b.txt': 'b' })
     const target = path.join(fixture.root, targetRel)

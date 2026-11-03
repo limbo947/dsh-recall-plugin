@@ -83,6 +83,19 @@ function expectOk(res) {
   return res.stdout
 }
 
+// 段数按根路径长度反推：写死段数会让「是否真的超 260」随 runner 的临时目录
+// 长度翻转（CI 的 /tmp 比开发机的 %TEMP% 短 40+ 字符，同一段数在两边结论相反）
+function longDirFor(rootLen, minTotal) {
+  const segs = []
+  let len = rootLen
+  while (len < minTotal) {
+    const seg = `d${String(segs.length + 1).padStart(2, '0')}xxxxxxx`
+    segs.push(seg)
+    len += seg.length + 1
+  }
+  return segs.join('/')
+}
+
 function makeFixture(files) {
   const base = fs.mkdtempSync(path.join(os.tmpdir(), 'recall-posix-'))
   dirs.push(base)
@@ -100,7 +113,9 @@ function makeFixture(files) {
     maxWorkspaceBytes: 268435456,
     scanBudgetMs: 10000,
   }
-  for (const [name, text] of Object.entries(files)) put(path.join(root, name), text)
+  // files 允许传函数：长路径用例要等 root 落盘后才能决定埋多深
+  const entries = typeof files === 'function' ? files(root) : files
+  for (const [name, text] of Object.entries(entries)) put(path.join(root, name), text)
   expectOk(runSh(ensureGitScript(store, 'git', [])))
   expectOk(runSh(snapshotScript(shellPath(root), store, 'git', 'm1', [])))
   return { base, root, shellRoot: shellPath(root), store }
@@ -157,12 +172,14 @@ describe.skipIf(!RUNNABLE)('POSIX rollback 真执行', () => {
   }, 30000)
 
   it('超过 260 字符的路径可重建并删除新增文件', () => {
-    const longDir = Array.from({ length: 20 }, (_, i) => `d${String(i + 1).padStart(2, '0')}xxxxxxx`).join('/')
-    const targetRel = `${longDir}/target.txt`
-    const extraRel = `${longDir}/extra.txt`
-    const fixture = makeFixture({ [targetRel]: 'before', 'a.txt': 'a', 'b.txt': 'b' })
-    const target = path.join(fixture.root, targetRel)
-    const extra = path.join(fixture.root, extraRel)
+    let longDir = ''
+    const fixture = makeFixture((root) => {
+      // 目标总长按 300 起算，给「root + 分隔符 + 文件名」留足余量
+      longDir = longDirFor(root.length, 300)
+      return { [`${longDir}/target.txt`]: 'before', 'a.txt': 'a', 'b.txt': 'b' }
+    })
+    const target = path.join(fixture.root, longDir, 'target.txt')
+    const extra = path.join(fixture.root, longDir, 'extra.txt')
     expect(target.length).toBeGreaterThan(260)
 
     fs.rmSync(nativePath(path.join(fixture.root, longDir.split('/')[0])), { recursive: true, force: true })
