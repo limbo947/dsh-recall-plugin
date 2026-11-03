@@ -645,12 +645,39 @@ export function diffScript(root: string, store: ScriptStore, gitExe: string, tag
   ].join('\n')
 }
 
-// 回退：恢复侧按 diff 变更集走 git archive --format=zip + Expand-Archive，
+// Expand-Archive 的逐条 cmdlet 开销会主导大恢复集回退；直接调用 .NET 保留
+// 覆盖语义，目录缓存省去重复 Test-Path。显式 UTF-8 保住 CJK 路径，finally
+// 释放句柄才能让随后的临时 zip 删除可靠执行。归档 mtime 是快照提交时间，若
+// 原样保留，下一次 add 的 stat 缓存可能与旧 index 碰撞而跳过 re-hash——必须像
+// POSIX 的 tar -m 一样把恢复文件 touch 到当前时刻。
+function expandZipBlock(): string {
+  return [
+    'Add-Type -AssemblyName System.IO.Compression.FileSystem',
+    'function Expand-ZipTo {',
+    '  $now = [DateTime]::UtcNow',
+    '  $made = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)',
+    "  $za = [System.IO.Compression.ZipFile]::Open($zip, 'Read', [System.Text.Encoding]::UTF8)",
+    '  try {',
+    '    foreach ($e in $za.Entries) {',
+    "      $t = $lpRoot + '\\' + ($e.FullName -replace '/','\\')",
+    '      if ($e.Name) {',
+    "        $d = $t.Substring(0, $t.LastIndexOf('\\'))",
+    '        if ($d -and $made.Add($d)) { [System.IO.Directory]::CreateDirectory($d) | Out-Null }',
+    '        [System.IO.Compression.ZipFileExtensions]::ExtractToFile($e, $t, $true)',
+    '        [System.IO.File]::SetLastWriteTimeUtc($t, $now)',
+    '      }',
+    '    }',
+    '  } finally { $za.Dispose() }',
+    '}',
+  ].join('\n')
+}
+
+// 回退：恢复侧按 diff 变更集走 git archive --format=zip + .NET 逐条解压，
 // 删除侧按清单移除「当前有、目标无」的文件。曾尝试 tar 优先（bsdtar 性能更好），
 // 实测否决：System32\bsdtar 在 GBK 活动代码页（ACP=936）机器上把 tar
 // 流里的 UTF-8 文件名按 ANSI 解码——中文文件名解包成「璇存槑.txt」式的
-// 乱码新文件，原路径反而丢失；且 tar -m 才是必需的（stat 缓存碰撞），
-// Expand-Archive 天然把 mtime 设为解包时刻，zip 链路反而更稳。
+// 乱码新文件，原路径反而丢失。zip 全程走 .NET 字符串 API，不经过这条
+// ANSI 解码链；解压后统一 touch，与 POSIX tar -m 的 stat 缓存纪律对齐。
 // 变更集恢复（issue #22，旧版整树 archive）：旧版 $restored 是目标树全量条数，
 // 改 1 个文件也把整棵快照树打 zip 全量解压（大工作区 GB 级三遍 IO；实机
 // 39.2 万条幽灵条目时打出 5.11 GB zip），未变更文件也被 -Force 覆写、mtime
@@ -660,7 +687,7 @@ export function diffScript(root: string, store: ScriptStore, gitExe: string, tag
 // 实际恢复条数，与 preview 的 diff 计数逐项相等（preview 的 added=本删除侧、
 // modified+restored=本恢复侧）。变更过半（restoreRel*2 ≥ targetMap）时整树
 // 一遍更优（N/100 次 archive+解压的启动开销超过单遍），回退旧路径。
-// 空恢复集跳过 archive（空 zip 会让 Expand-Archive 报错），只执行删除。
+// 空恢复集跳过 archive 与解压，只执行删除。
 // archive 失败显式 throw（pwsh 对 native 非零不抛，I14）——不许半回退报
 // ROLLBACK_OK（F-G2，与删除侧同纪律）。
 // 回退后保留快照 tag 与索引：git delta 空间便宜，保留历史可再次
@@ -671,6 +698,11 @@ export function rollbackScript(root: string, store: ScriptStore, gitExe: string,
     '$git = ' + psq(gitExe),
     '$g = ' + psq(store.git),
     '$root = ' + psq(root),
+    // PS5.1 的 .NET Framework 不认清单级长路径；\\?\ 前缀绕过 MAX_PATH 且不再
+    // 规范化路径，必须先把 / 归一为 \，UNC 再改写为 \\?\UNC\。解压与删除共用。
+    "$lpRoot = $root.Replace('/','\\')",
+    String.raw`$lpRoot = if ($lpRoot.StartsWith('\\?\')) { $lpRoot } elseif ($lpRoot.StartsWith('\\')) { '\\?\UNC\' + $lpRoot.Substring(2) } else { '\\?\' + $lpRoot }`,
+    "$lpRoot = $lpRoot.TrimEnd('\\')",
     dropGitlinksBlock(),
     excludeSyncBlock(store.excludeFile, base),
     // issue #29：同 snapshotScript（回退前的当前清单同样不该为大文件写对象）
@@ -707,23 +739,24 @@ export function rollbackScript(root: string, store: ScriptStore, gitExe: string,
     '$restored = $restoreRel.Count',
     'if ($restored -gt 0) {',
     '  $zip = ' + psq(store.dir + '\\restore-tmp.zip'),
+    expandZipBlock(),
     '  if ($restoreRel.Count * 2 -ge $targetMap.Count) {',
     '    & $git --git-dir=$g archive --format=zip --output=$zip ' + psq(tag),
     "    if ($LASTEXITCODE -ne 0) { throw ('git archive failed (exit ' + $LASTEXITCODE + ')') }",
-    '    Expand-Archive -LiteralPath $zip -DestinationPath $root -Force',
+    '    Expand-ZipTo',
     '    Remove-Item -LiteralPath $zip -Force',
     '  } else {',
     '    for ($i = 0; $i -lt $restoreRel.Count; $i += 100) {',
     '      $batch = $restoreRel.GetRange($i, [Math]::Min(100, $restoreRel.Count - $i))',
     '      & $git --literal-pathspecs --git-dir=$g archive --format=zip --output=$zip ' + psq(tag) + ' -- $batch',
     "      if ($LASTEXITCODE -ne 0) { throw ('git archive failed (exit ' + $LASTEXITCODE + ')') }",
-    '      Expand-Archive -LiteralPath $zip -DestinationPath $root -Force',
+    '      Expand-ZipTo',
     '      Remove-Item -LiteralPath $zip -Force',
     '    }',
     '  }',
     '}',
-    // 删除失败语义与 POSIX 版对齐（F-G2）：本侧 EAP=Stop 下 Remove-Item
-    // 失败直接抛终止错误、pwsh 以非零码退出；POSIX 侧 rm 在 set -e 的 if
+    // 删除失败语义与 POSIX 版对齐（F-G2）：本侧 EAP=Stop 下 File.Delete 失败
+    // 直接抛终止错误、pwsh 以非零码退出；POSIX 侧 rm 在 set -e 的 if
     // 条件里失败不会自动终止，须显式 exit 1（见 scripts.posix.js rollbackScript）。
     // 任何一侧半回退都不许报 ROLLBACK_OK——假成功会让救援永不触发（H1）。
     '$deleted = 0',
@@ -731,8 +764,12 @@ export function rollbackScript(root: string, store: ScriptStore, gitExe: string,
     '  if (-not $r) { continue }',
     '  $tab = $r.IndexOf("`t"); $path = $r.Substring($tab + 1)',
     '  if (-not $targetMap.ContainsKey($path)) {',
-    "    $full = Join-Path $root ($path.Replace('/','\\'))",
-    '    if (Test-Path -LiteralPath $full) { Remove-Item -LiteralPath $full -Force; $deleted++ }',
+    "    $full = $lpRoot + '\\' + ($path.Replace('/','\\'))",
+    '    if ([System.IO.File]::Exists($full)) {',
+    '      $attrs = [System.IO.File]::GetAttributes($full)',
+    '      if (($attrs -band [System.IO.FileAttributes]::ReadOnly) -ne 0) { [System.IO.File]::SetAttributes($full, [System.IO.FileAttributes]::Normal) }',
+    '      [System.IO.File]::Delete($full); $deleted++',
+    '    } elseif ([System.IO.Directory]::Exists($full)) { throw ("cannot remove directory at tracked file path: " + $path) }',
     '  }',
     '}',
     "Write-Output ('ROLLBACK_OK ' + $deleted + ' ' + $restored)"

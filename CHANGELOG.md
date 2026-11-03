@@ -2,6 +2,18 @@
 
 本文件格式遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循语义化版本。
 
+## [Unreleased]
+
+### 修复
+
+- **Windows 回退解压不再逐条走 `Expand-Archive`（issue #34）**：整树与分批两个恢复分支改走共用的逐条 .NET `ExtractToFile(overwrite: true)`，目录创建按大小写不敏感集合缓存，显式 UTF-8 并 `finally` 释放归档句柄。保留覆盖、CJK 路径、恢复计数、archive 失败可见与 H1 救援语义；issue 报告者的 5000 文件实测为 17.2s → 4.0s，本机冷缓存受 Defender 影响较大，不承诺固定耗时。
+- **Windows 回退支持超过 260 字符的路径**：恢复与删除统一用 `\\?\`（UNC 为 `\\?\UNC\`）扩展绝对路径拼接，解压经 .NET 目录/文件 API 落盘；删除改用 `File.Delete` 并先清只读属性，普通路径与超长路径行为一致。解压失败或目录替换仍会终止并进入 H1 救援，不会假报 `ROLLBACK_OK`。
+- **回退恢复后的文件 mtime 显式刷新**：逐条解压保留的是快照提交时间，与旧 index 的 stat 记录可能碰撞，导致紧接着的快照漏掉恢复内容、后续回退取回错误版本。现在与 POSIX 的 `tar -m` 对齐，把恢复文件 touch 到当前时刻。
+
+### 测试
+
+- **POSIX 回退补齐真执行回归**：新增 bash + git 冒烟，覆盖分批恢复、CJK/空格路径、`tar -m` 的 mtime 失配和超过 260 字符的路径。POSIX 模板原本已具备这些语义，本次只修正过时注释，不改实现。
+
 ## [2.6.2] - 2026-11-03
 
 ### 修复

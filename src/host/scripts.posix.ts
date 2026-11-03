@@ -535,8 +535,8 @@ export function rollbackScript(root: string, store: ScriptStore, gitExe: string,
     // mtime = 解包时刻）。必须如此：tar 默认保留归档内 mtime，而快照→篡改→
     // 回滚常在数秒内完成，恢复出的 mtime 可能与 index 里旧条目的 stat 记录
     // 碰撞，下一次 add -A 的 stat 缓存误判「未变更」跳过 re-hash——工作区
-    // 内容与快照从此脱钩（实测解包出篡改前内容的间歇性失败）。Windows 版的
-    // Expand-Archive 天然把 mtime 设为解包时刻，无此问题；-m 让 tar 对齐。
+    // 内容与快照从此脱钩（实测解包出篡改前内容的间歇性失败）。Windows 逐条
+    // 解压也会显式 touch，两侧语义由各自的回退冒烟测试锁定。
     '    "$git" --git-dir="$g" archive ' + psq(tag) + ' | tar -x -m -C "$root"',
     '  else',
     '    batch=()',

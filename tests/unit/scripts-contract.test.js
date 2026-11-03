@@ -187,6 +187,31 @@ describe('脚本模板同名导出契约', () => {
     expect(po).not.toContain('restored=$(wc -l < "$tmpt"')
   })
 
+  it('issue #34：Windows 解压走可覆盖的 .NET 逐条 API', () => {
+    // Expand-Archive 的逐条 cmdlet 开销在大恢复集上主导回退耗时；替换时仍须
+    // 保留覆盖、中文路径和归档句柄释放，不能用目标已存在即失败的 ExtractToDirectory。
+    const pw = pwsh.rollbackScript('ROOT', FAKE_STORE, 'git-exe', 'snap-1', [])
+    expect(pw).not.toContain('Expand-Archive')
+    expect(pw).not.toContain('ExtractToDirectory')
+    expect(pw).toContain("[System.IO.Compression.ZipFile]::Open($zip, 'Read', [System.Text.Encoding]::UTF8)")
+    expect(pw).toContain('[System.IO.Compression.ZipFileExtensions]::ExtractToFile($e, $t, $true)')
+    expect(pw).toContain('[System.IO.File]::SetLastWriteTimeUtc($t, $now)')
+    expect(pw).toContain('[System.StringComparer]::OrdinalIgnoreCase')
+    expect(pw).toContain('$za.Dispose()')
+  })
+
+  it('Windows 超长路径：恢复与删除使用扩展路径和 .NET 文件 API', () => {
+    // PS5.1/.NET Framework 不认清单级长路径；扩展前缀必须同时覆盖解压落盘和
+    // 删除侧，否则恢复报错而删除侧会静默留下目标已不存在的文件。
+    const pw = pwsh.rollbackScript('ROOT', FAKE_STORE, 'git-exe', 'snap-1', [])
+    expect(pw).toContain("$lpRoot = $root.Replace('/','\\')")
+    expect(pw).toContain('$lpRoot = if ($lpRoot.StartsWith(')
+    expect(pw).toContain('UNC')
+    expect(pw).toContain("$lpRoot + '\\' + ($e.FullName -replace '/','\\')")
+    expect(pw).toContain('[System.IO.File]::Delete($full)')
+    expect(pw).not.toContain('Remove-Item -LiteralPath $full')
+  })
+
   for (const key of pwshKeys) {
     it(`${key} 两侧类型一致`, () => {
       const p = pwsh[key]
