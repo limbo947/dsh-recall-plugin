@@ -2,6 +2,17 @@
 
 本文件格式遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循语义化版本。
 
+## [Unreleased]
+
+### 兼容性
+
+- **dsh 0.2.2-rc.1（零破坏，无需改码）**：89 包 `lib`/`dist` 漂移全部不触插件调用点——`dsh-session`（`sessions.fork`）、`dsh-shell`、`dsh-workspace`、`dsh-session-query`、`dsh-client-ui-slots`、`dsh-host-webserver` 逐字节相同；会话 API 拆分（history/投影/列表独立接口）与控制帧 `changes[]` 批量形状属官方内部协议；cordis 4.1.0 的 `Fiber` 字段重构与 loader 的 `entry.fiber` 包装未被插件读取（`ctx.fiber.entry` 与 `loader/volatile-update` 保留）。`ChatNodeOwnerProps.fileMentions` 移除与 `MessageImage` 必填 `getTriggerProps` 是生态 Breaking，插件走官方 `renderMessageImages` 闭包与 `loadImage` 不受影响。核验见 [docs/upgrade-assessments/dsh-0.2.2-rc.1.md](docs/upgrade-assessments/dsh-0.2.2-rc.1.md)。
+- 台账同步：`dshReleases` 补 `0.2.2-rc.1`；peer 范围不变（`^4.0.1` / `^3.18.1` 已覆盖 cordis 4.1.0 / schemastery 3.19.0）；镜像十二次重拉 13 源逐字节相同；契约文档、兼容台账、README 双语徽章与支持范围同步。
+
+### 测试
+
+- 门禁在 0.2.2-rc.1 实装复跑：typecheck、单测 597、client 134、probe 58/58、verify:host 全过；web 宿主冒烟页面 200、模块清单含插件、日志无 compat/skip。
+
 ## [2.6.3] - 2026-11-03
 
 ### 修复

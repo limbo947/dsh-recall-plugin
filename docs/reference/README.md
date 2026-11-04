@@ -2,9 +2,9 @@
 
 > 用途：dsh 插件开发相关官方文档的本地副本，改代码前优先查这里，避免每次联网翻文档。
 >
-> 归档日期：2026-10-28，对应 [deepseek-harness](https://github.com/deepseek-ai/deepseek-harness) 仓库 `dsh-v0.2.2-alpha.2` tag `docs/` 目录（raw.githubusercontent 按 tag 拉取；直连可用，无需代理）。
+> 归档日期：2026-11-04，对应 [deepseek-harness](https://github.com/deepseek-ai/deepseek-harness) 仓库 `dsh-v0.2.2-rc.1` tag `docs/` 目录（raw.githubusercontent 按 tag 拉取；直连可用，无需代理）。
 >
-> 归档 dsh 版本：0.2.2-alpha.2（`npm run check:dsh` 的漂移比对基准；重拉镜像后同步更新本字段，见下方「更新方式」）
+> 归档 dsh 版本：0.2.2-rc.1（`npm run check:dsh` 的漂移比对基准；重拉镜像后同步更新本字段，见下方「更新方式」）
 >
 > 在线站点：https://deepseek-harness.github.io/deepseek-harness/ ｜ 每份文件头部都带「来源」注释，可溯回官方原文。
 
@@ -136,3 +136,7 @@ iwr -UseBasicParsing 'https://raw.githubusercontent.com/deepseek-ai/deepseek-har
 > **fork 配方改为 `ctx.agents.create({ sessionId, seed, inheritedEventCount, meta: { isSeeded: true } })`**——不再写 `parentSession` / `seedLength`（对应本版「普通会话分支独立运行、不再被误识别为子智能体」）；
 > ③ `13-cookbook-extension.md`（净 −18 B，一处）：钩子系统的 `agent/request` 同步骤移除。
 > 本轮 Node fetch 直连一次成功，13/13 齐，无需代理或重试。
+>
+> 2026-11-04 十二次重拉（`dsh-v0.2.2-alpha.2` → `dsh-v0.2.2-rc.1`）：**13 源全部逐字节相同**（归一化 CRLF 后比较，delta 均为 0 B）——连续第三轮零差异的前两轮之后再次零差异。
+> 与代码面证据一致：rc.1 的插件系统改动（cordis 4.1.0 配置访问、Session API 独立接口、Projection 异步注册、`tools.resolve`/`executable` 迁移）都落在包实现与 `.d.ts`，`docs/` 侧无措辞调整；本插件消费面（fork/附件/草稿/槽/设置）零破坏。
+> 本轮 Node fetch 直连一次成功，13/13 齐，无需代理或重试，**无文件覆盖**（仅更新头部两字段）。

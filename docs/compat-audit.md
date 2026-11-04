@@ -7,6 +7,18 @@
 >
 > 出处标注为 2026-09-01 核验（alpha.3）；每次 dsh 升级后按「复查动作」更新本节「核验日期」。
 >
+> **0.2.2-rc.1 核验（2026-11-04）——零破坏版本（已实装）：89 包漂移全部不触插件调用点、peer 窗口无需追加、无需改码**：
+> **版本链路**：`0.2.2-alpha.2`(10-28) → `rc.1`(11-04)，单版增量（中间无其他版本）。
+> **核验方式**：release notes + **两棵实装树逐文件 SHA256**（旧实装目录改名作基线、新装对比；包集合 **329 → 329**，新增 `dsh-client-ui-context-menu` / `dsh-client-ui-file-actions` / `dsh-fs-patch`、移除 `dsh-computer-use` / `dsh-cua` / `dsh-cua-bundle`；**89 包 `lib`/`dist` 漂移**）+ 消费点 `.d.ts`/实现逐行 diff + 门禁实跑 + web 宿主冒烟。
+> **消费面零漂移**：`dsh-session`（`sessions.fork` 整包）、`dsh-session-query`、`dsh-shell`（`setDraft`/`submit`/`addAttachments`/`snapshot`/`updateQueue`）、`dsh-workspace`（`get`/`archiveSession`）、`dsh-client-ui-slots`（槽框架与 priority 冲突机制）、`dsh-client-connection`、`dsh-host-webserver`（exact 路由注册面）、`dsh-attachment`、`dsh-client-ui-settings-plugins`、`dsh-host-plugin-inventory`、`dsh-host-frontend-static` 逐字节相同；`dsh-client-ui-workspace` 的 `navigation.d.ts`（`openSession`/`archiveSession`/`unarchiveSession`）未变（漂移全在侧栏右键菜单重构）。
+> **会话 API 拆分（notes 高相关项）**：`dsh-api-session-controller` 的改动集中在 `HistoryController` / `ProjectionListener` / `ApiSessionList`（独立接口 + `listMetadata` 句柄）与 `SessionManager.handleControlFrame` 的替换帧形状（`{key,value}` → `{changes:[{key,val}]}`）——均为官方 Host↔Client 内部协议，插件不消费控制帧；`fork` / `readAttachment` / `createDrafts` / `updateQueue` 签名与实现未动（`manager.d.ts` 仅两行注释）。
+> **cordis 4.1.0（notes 高相关项）**：`Fiber.config` 改「下次激活的原始输入」、`effectiveConfig` 为生效值、`store` → `committed`、`provisions` 新增、`update()` 返回 `Awaitable<void>`；`cordis-plugin-loader` 的 `Entry.fiber` 改为 `{ ctx: { fiber } }` 包装（官方全包同步改 `this.fiber.ctx.fiber`），`write()` → `commit(change)`、`internal/update` 拆出 `internal/commit`。**插件不读这些字段**：设置 ns 解析走 `ctx.fiber.entry`（loader 仍在 `internal/plugin` 挂载）、热更走 `loader/volatile-update`（仍在 `_commitVolatile` 后派发，改 `fiber.ctx.emit` 不影响冒泡）；`dsh-settings` 的 4 行改动只是把 `owner` / `entry.fiber` 换成 `ctx.fiber` 解包，注册入口未变。
+> **patch 层（合规清单 #4）**：`cordis-plugin-include` 抽出 `applyPatches` + `journal` + `PatchIndex`，`dsh-app-boot` 同步改导入；insert（`data.push(...structuredClone(insert))`）与按 id 覆盖 key 的语义保持，插件的单条 `insert`（带 `id: recall`）行为不变；新增的是运行时改动回写与 owner 归属（插件管理页编辑 entry 用）。
+> **两条生态 Breaking（不触插件）**：① `ChatNodeOwnerProps` 移除 `fileMentions`、`ChatViewInjected` 新增 `resolveFilePath` / `useContextMenu`——插件自绘兜底面不渲染文件引用链接、新面走官方 content Factory；② `dsh-client-ui-attachment` 的 `MessageImage` / `ImageGallery` 新增**必填** `getTriggerProps`——插件不经组件级调用，走官方 `renderMessageImages` 闭包与 `loadImage`（`ImageLoader` 未变）。composer 系列槽新增「fixed 浮层必须 portal 到 document body」属贡献约束，插件四个注册 key 不在 composer 内。
+> **正向面**：第三方插件更新与热更新失败回退旧版、安装失败区分「安装失败/启用失败」并给 Host 日志入口（`dsh-plugin-manager` 的漂移即此处的连接检查诊断流式日志）；`dsh-session-log-deepseek` 纯加法（`registerExclusion`）。
+> **第三方依赖**：cordis `4.0.6-alpha.1 → 4.1.0`、schemastery `3.18.6-alpha.1 → 3.19.0`、Node `>=24.9.0`（沿用）。插件 peer 的 `^4.0.1` / `^3.18.1` **天然覆盖**新 minor，`dsh-*` 的 `>=0.2.2-alpha.1 <0.3.0` 覆盖 rc.1 → **无需追加段**。
+> **实装与门禁（同日）**：`npm install -g @deepseek-ai/dsh@0.2.2-rc.1`（added 654 packages / 5m，无旧目录回收告警），`dsh --version` 与包内 `package.json` 双确认；`typecheck` OK、单测 **597**、client **134**、probe **58/58**、`verify:host` 全过、`check:dsh` 全满足；web 宿主冒烟页面 200（44.5 KB）、模块清单含 `{"id":"dsh-recall-plugin",…}`、stderr 仅 `recall shell dialect probe: pwsh`、端口正常释放。镜像十二次重拉 13 源逐字节相同。记录归口 [upgrade-assessments/dsh-0.2.2-rc.1.md](./upgrade-assessments/dsh-0.2.2-rc.1.md)。
+>
 > **0.2.2-alpha.2 核验（2026-10-28）——一处真实破坏（已修），消费面其余零变更**：
 > **版本链路**：`0.2.1-rc.3`(10-24) → `0.2.2-alpha.2`(10-28)，中间跨 `rc.4` / `0.2.2-alpha.1`（rc.4 只发 npm 未落 dist-tag，本机未装）。
 > **核验方式**：release notes + **两棵实装树逐文件 SHA256**（旧实装目录改名作基线、新装对比；包集合 **305 → 329**，新增 24 / 移除 `dsh-client-ui-deepseek-model-label-1017`）+ 消费点逐行 diff + 门禁实跑 + web 宿主冒烟。
