@@ -1705,6 +1705,30 @@
   （回收判据）；`STATE` 取值是回收侧的唯一真相源，新增形态必须先想清楚「能否回收」。
   细节与实测见 [plans/completed/plan-dump-visible-and-empty-reclaim.md](plans/completed/plan-dump-visible-and-empty-reclaim.md)。
 
+### I47 版本入口与会话渲染解耦；`openSession` 只发起导航（issue #35）
+
+- **既有行为**：版本翻页器只注册在 `conversation.chat.assistant-actions`，切换顺序是
+  「归档来源 → 解档目标 → 打开目标」；`uiWorkspace.openSession(target): void` 只发起导航。
+- **问题（issue #35 现场）**：模型 provider 插件被禁用或卸载后，消息区可能不渲染——
+  `assistant-actions` 组件不挂载，家族数据虽在 `localStorage`，入口却消失；同时旧顺序在解档
+  或导航失败后只 toast，不恢复归档状态，用户可能卡在「来源已归档、目标未打开」。
+- **插件对策**：① 新增 `conversation.session.header.actions`（`kind:list`、`scope:session`）
+  注册 `VersionHeaderAction`，standard props 注入显式 `sessionId`，消息区入口在位时自动让位；
+  ② 切换改为「解档目标 → `openSession` → 目标携带显式 `sessionId` 挂载后才归档来源」；
+  ③ 同步失败按 workspaces 快照恢复目标原归档态，来源不预归档；5 秒未就绪释放操作态并提示，
+  保留两个会话可访问，宁可短暂并存也不困住用户。
+- **探针/单测**：`tests/probe/api-surface.test.js`（header.actions 的 list/session 契约与会话头
+  render slots）；`tests/client/version-pager.test.ts`（解档失败 / 同步导航失败 / 目标挂载后归档 /
+  未就绪超时 / 头部兜底与让位）；`tests/client/app.test.ts`（双入口注册与无消息 DOM 渲染）。
+- **实机验证（2026-11-06，dsh 0.2.2-rc.1，临时 DSH_HOME + 本地 mock provider）**：有标题会话
+  在消息区翻页器缺席时会话头显示 `‹ 1/2 ›`；导航到不存在会话抛 `sessions.retain` 后来源仍活动、
+  归档集合为空；目标为未就绪空白会话时 5 秒超时文案出现且来源不归档；切到另一有标题会话后
+  目标显示 `‹ 2/2 ›`，来源随后进入归档集合。
+- **失效症状**：provider 缺失时版本入口再次消失，或切换失败后来源被归档且目标不可达。
+- **复查动作**：跑 `test:probe` 的 header.actions 断言与 `test:client` 的版本翻页器用例；
+  官方若把该槽改 scope / kind 或从会话头 renderSlots 移除，先确认消息区入口是否足以覆盖
+  异常会话，再决定替代槽位（不得回到依赖消息 DOM 推断 sessionId）。
+
 
 ## 与 E1 verify-host 的对应关系
 

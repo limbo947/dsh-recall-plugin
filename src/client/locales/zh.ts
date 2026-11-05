@@ -125,6 +125,7 @@ export const zh: Record<string, string> = {
   'pager.prev': '上一版本',
   'pager.next': '下一版本',
   'pager.label': '版本 {n}/{total}',
+  'pager.openUnconfirmed': '目标会话未在时限内打开，原会话保持可访问；请重试或检查模型插件',
 
   // ---- toast（降级提示 / 快照反馈）----
   'toast.tag': '撤回插件',

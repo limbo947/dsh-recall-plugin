@@ -61,7 +61,7 @@ export function createApp(React: ReactApi) {
     const { RecallSettingsCard } = buildSettingsCards(React, util, sessionsSvc, workspacesSvc, uiWorkspaceSvc)
     // 版本翻页器：挂在回合末尾的官方 assistant-actions list 槽（0.2.1 起存在；
     // 旧版宿主没有该槽时 inject 静默 no-op，撤回/编辑主链不受影响）
-    const { VersionPager } = buildVersionPager(React, util, workspacesSvc, uiWorkspaceSvc)
+    const { VersionPager, VersionHeaderAction } = buildVersionPager(React, util, workspacesSvc, uiWorkspaceSvc)
 
     // conversation.chat.node 是 keyed slot，同一 key 的最低 priority 渲染。
     // 默认平台渲染器通常为 0，dsh-turn-fold 等插件可能已占 -1；旧实现固定
@@ -103,6 +103,22 @@ export function createApp(React: ReactApi) {
       ))
     } catch (error) {
       appLog.error('version pager register failed:', error)
+    }
+
+    // 会话头兜底入口：消息区（含 assistant-actions）因模型 provider 缺失等原因
+    // 不渲染时仍可切版本。该槽是 session scope，官方 standard props 会注入
+    // sessionId；组件在消息区翻页器可用时自动隐藏，避免双入口。
+    try {
+      slots.inject('conversation.session.header.actions', () => slots.register(
+        {
+          name: 'conversation.session.header.actions',
+          id: 'recall-version-header',
+          order: 20,
+        },
+        VersionHeaderAction
+      ))
+    } catch (error) {
+      appLog.error('version header action register failed:', error)
     }
 
     // 「插件配置」分区挂撤回卡片：settings.plugin.item 是 root 级 keyed slot

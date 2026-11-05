@@ -118,6 +118,7 @@ export const en: Record<string, string> = {
   'pager.prev': 'Previous version',
   'pager.next': 'Next version',
   'pager.label': 'Version {n} of {total}',
+  'pager.openUnconfirmed': 'The target session did not open in time; the current session is still available. Retry or check its model provider',
 
   // ---- toast ----
   'toast.tag': 'Recall plugin',

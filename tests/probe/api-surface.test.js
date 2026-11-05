@@ -97,6 +97,20 @@ describe('官方 API 字段探针（dsh 安装目录）', () => {
     })
   })
 
+  describe('会话头动作槽（issue #35 兜底入口）', () => {
+    // 版本翻页器的会话头兜底依赖该 list/session 槽：官方把它改成 single、
+    // 换 scope 或从头部 renderSlots 移除，provider 缺失时的版本入口会静默消失。
+    const p = 'dsh-client-ui-conversation'
+    const f = '/lib/types/client/contract/slots.d.ts'
+    const guard = () => has(p, f)
+
+    probeIf(guard)('conversation.session.header.actions 仍是 list/session 且由会话头渲染', () => {
+      const src = read(p, f)
+      expect(src).toMatch(/'conversation\.session\.header\.actions':\s*\{\s*kind:\s*'list';\s*scope:\s*'session';\s*owner:\s*ConversationHeaderActionOwnerProps;\s*\}/)
+      expect(src).toMatch(/ConversationSessionHeaderSlotProps[\s\S]{0,300}'conversation\.session\.header\.actions'/)
+    })
+  })
+
   describe('ConversationNode 节点集合（I5：user/steering 覆盖 + 官方新增节点即红）', () => {
     // I5 只注册 user+steering 两个 keyed key；节点投影 kind 全集以 records.d.ts 的
     // ConversationNode union 成员为代理。官方新增 surface 节点类型（= 新投影 kind）时

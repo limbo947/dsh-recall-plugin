@@ -218,6 +218,20 @@ interface ChatNodeOwnerProps {
 
 * 0.1.2-alpha.1 新增 turn-process 折叠：user/steering 不参与折叠（独立 kind），撤回按钮显示不受影响（已冒烟确认）
 
+#### `conversation.session.header.actions` —— 会话头动作区（issue #35 兜底入口）
+
+```ts
+'conversation.session.header.actions': {
+  kind: 'list'          // 按 { id, order } 有序堆叠，会话头标题旁动作区
+  scope: 'session'      // standard props 注入 sessionId / useSession 等 kit 项
+  owner: ConversationHeaderActionOwnerProps // 仅 children?: never，条目自取状态
+}
+```
+
+* 插件注册 `{ name, id: 'recall-version-header', order: 20 }`，不声明 `inject`：session scope 的 `props.sessionId` 由 kit 注入（I3）。头部 render slots 会渲染该槽，消息区（`assistant-actions`）不渲染时它仍是版本恢复入口。
+
+* 头部动作区对溢出裁剪并淡出；插件入口是轻量文本控件，不开浮层，故不受 portal 约束影响。
+
 #### 输入区写入链与附件回读（I34 / **B1**，`client/ui-conversation` + `client/api-session-controller`）
 
 ```ts
@@ -301,7 +315,7 @@ interface PluginConfigViewProps { readonly view: 'summary' | 'page' }
 | 3  | conversation                              | single | session-maybe | ui-layout           | 会话外层壳                          |
 | 4  | conversation.session                      | single | session       | ui-conversation     | 严格会话体                          |
 | 5  | conversation.session.header               | single | session       | ui-conversation     | 会话头                            |
-| 6  | conversation.session.header.actions       | —      | session       | ui-conversation     | 头部动作区                          |
+| 6  | conversation.session.header.actions       | list   | session       | ui-conversation     | 头部动作区（插件注册版本兜底入口）           |
 | 7  | conversation.session.header.lineage       | —      | session       | ui-conversation     | 头部谱系区                          |
 | 8  | conversation.session.header.utilities     | —      | session       | ui-conversation     | 头部工具区                          |
 | 9  | conversation.view                         | list   | session       | ui-conversation     | Chat 主视图                       |

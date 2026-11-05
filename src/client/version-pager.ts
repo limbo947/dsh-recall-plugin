@@ -1,13 +1,14 @@
 /**
- * dsh-recall-plugin — 版本翻页器 ‹ X/N ›（assistant-actions 槽）
+ * dsh-recall-plugin — 版本翻页器 ‹ X/N ›（assistant-actions + 会话头兜底）
  *
  * 每次撤回/编辑重发都会 fork 出新会话，同一段对话于是有多个真实版本。翻页器
- * 挂在回合末尾的官方操作区，点击在家族成员间切换：归档当前、解档目标、打开
- * 目标。为什么必须「归档当前」——侧栏同时出现两个同名会话时用户无法分辨哪个
- * 是当前分支，官方 fork 出来的会话也共享同一标题。
+ * 常规挂在回合末尾的官方操作区；provider 缺失等导致消息区不渲染时，会话头
+ * 入口仍能按显式 sessionId 切换（issue #35）。切换先解档并导航目标，等目标
+ * 挂载后才归档来源——openSession 只发起导航，不能证明会话可加载；宁可两个
+ * 会话短暂并存，也不留下「来源已归档、目标未打开」的死角。
  *
- * 只在最后一个回合显示：家族是会话级的，历史回合各挂一个控件会让同一页出现
- * 多个入口，点哪个都切到同一处，纯噪音。
+ * 消息区只在最后一个回合显示：家族是会话级的，历史回合各挂一个控件会让同一页
+ * 出现多个入口，点哪个都切到同一处，纯噪音。头部兜底在消息区入口可用时让位。
  */
 
 import type { ReactApi, UtilApi } from './util.js'
@@ -79,6 +80,22 @@ export interface VersionPagerApi {
   // sessionId 由槽的 inject(sessionId) 注入（官方 assistant-actions 契约），
   // messageId 是槽 props 本身
   VersionPager: (props: { messageId?: string; sessionId?: string }) => import('react').ReactNode
+  // 会话头兜底入口：消息区因 provider 缺失等原因不渲染时，仍能按显式 sessionId 切版本
+  VersionHeaderAction: (props: { sessionId?: string }) => import('react').ReactNode
+}
+
+// 目标挂载确认的兜底时限：超时后不归档来源，宁可短暂并存两个可见会话也不困住用户。
+const READY_TIMEOUT_MS = 5000
+
+interface PendingSwitch {
+  from: string
+  to: string
+  done: () => void
+  timer?: ReturnType<typeof setTimeout>
+}
+
+function pagerClass(variant: 'message' | 'header'): string {
+  return variant === 'header' ? 'dsh-recall-pager dsh-recall-pager-header' : 'dsh-recall-pager'
 }
 
 export function buildVersionPager(
@@ -88,68 +105,134 @@ export function buildVersionPager(
   uiWorkspaceSvc?: ClientUiWorkspaceService
 ): VersionPagerApi {
   const { t, showThrottledToast } = util
+  let pending: PendingSwitch | null = null
+  let archiving = false
+  let primarySessionId: string | null = null
+  const headerListeners = new Set<() => void>()
 
-  function VersionPager(props: { messageId?: string; sessionId?: string }): import('react').ReactNode {
+  function setPrimarySessionId(sessionId: string | null): void {
+    if (primarySessionId === sessionId) return
+    primarySessionId = sessionId
+    for (const notify of headerListeners) notify()
+  }
+
+  // openSession 只发起导航；由目标会话的明确 sessionId 挂载信号确认就绪，才收走来源入口。
+  function settlePending(sessionId: string): void {
+    const job = pending
+    if (!job || job.to !== sessionId) return
+    pending = null
+    if (job.timer) clearTimeout(job.timer)
+    archiving = true
+    Promise.resolve()
+      .then(() => workspacesSvc.archiveSession(job.from))
+      .catch((error) => {
+        // 目标已经打开，来源归档失败只遗留两个可访问会话，不做反向导航或归档目标。
+        showThrottledToast(t('toast.pagerFailed', { error: String(error).slice(0, 120) }))
+      })
+      .then(() => { archiving = false; job.done() })
+  }
+
+  function PagerView(props: { messageId?: string; sessionId?: string; variant?: 'message' | 'header' }): import('react').ReactNode {
+    const variant = props.variant === 'header' ? 'header' : 'message'
+    // 头部入口只信显式 sessionId：消息 DOM 与共享位在异常会话里本就不可靠
+    const sessionId = variant === 'header'
+      ? String(props.sessionId || '')
+      : String(props.sessionId || currentSessionId())
     const ref = React.useRef<HTMLDivElement | null>(null)
     const [family, setFamily] = React.useState<VersionFamily | null>(null)
     const [visible, setVisible] = React.useState(false)
+    const [primaryPresent, setPrimaryPresent] = React.useState(false)
     const [busy, setBusy] = React.useState(false)
 
     // 家族数据在 fork 成功时写入 localStorage；挂载与消息变化时重读即可覆盖
     // 「刚提交完编辑、翻页器随新消息重挂」这条路径。延后一拍再判「是否最后一
     // 个回合」：新 turn-tail 可能在本组件首次 effect 之后才插进文档
     React.useEffect(() => {
+      if (props.sessionId) settlePending(props.sessionId)
+      if (variant === 'header') {
+        setFamily(familyOf(sessionId))
+        const sync = () => setPrimaryPresent(primarySessionId === sessionId)
+        sync()
+        headerListeners.add(sync)
+        return () => { headerListeners.delete(sync) }
+      }
       const measure = () => {
-        setFamily(familyOf((props && props.sessionId) || currentSessionId()))
-        setVisible(isLastTurnTail(ref.current))
+        const nextFamily = familyOf(sessionId)
+        const nextVisible = isLastTurnTail(ref.current)
+        setFamily(nextFamily)
+        setVisible(nextVisible)
+        setPrimarySessionId(nextVisible && nextFamily && nextFamily.ids.length >= 2 ? sessionId : null)
       }
       measure()
       const timer = setTimeout(measure, 60)
-      return () => clearTimeout(timer)
-    }, [props && props.messageId])
+      return () => {
+        clearTimeout(timer)
+        if (primarySessionId === sessionId) setPrimarySessionId(null)
+      }
+    }, [variant, sessionId, props.messageId])
 
-    const show = Boolean(family && family.ids.length >= 2 && visible)
+    const show = Boolean(family && family.ids.length >= 2 && (variant === 'header' ? !primaryPresent : visible))
     if (!show || !family) {
       // 容器必须照常渲染（空则 CSS :empty 隐藏）：若这里返回 null，ref 永不
       // 挂载，「我是最后一个回合吗」的第一步就量不到自己
-      return React.createElement('div', { className: 'dsh-recall-pager', ref })
+      return React.createElement('div', { className: pagerClass(variant), ref })
     }
 
     const total = family.ids.length
     const index = family.index
     const go = (delta: number) => {
-      if (busy) return
+      if (busy || pending || archiving) return
       const target = family.ids[index + delta]
       if (!target) return
-      const current = activeSession.id || family.ids[index]
+      const current = family.ids[index]
       if (!current || current === target) return
       setBusy(true)
       const scroller = scrollerOf(ref.current)
       const anchor = captureAnchor()
       const done = () => setBusy(false)
-      // 归档当前 + 解档目标 + 打开目标：官方没有「切换到归档会话」的单步动作，
-      // 必须先解档（归档会话不是合法的导航目标，直接 open 会落空态）
+      const job: PendingSwitch = { from: current, to: target, done }
+      pending = job
+      job.timer = setTimeout(() => {
+        if (pending !== job) return
+        pending = null
+        showThrottledToast(t('toast.pagerFailed', { error: t('pager.openUnconfirmed') }))
+        done()
+      }, READY_TIMEOUT_MS)
+      let targetWasArchived = false
+      try {
+        const snapshot = workspacesSvc.list && workspacesSvc.list.getSnapshot()
+        targetWasArchived = Boolean(snapshot && snapshot.archivedSessionIds && snapshot.archivedSessionIds.includes(target))
+      } catch (e) { /* 快照不可读时不做可能误归档的补偿 */ }
+      let unarchived = false
+      let navigationReturned = false
+      // 来源只在目标挂载后由 settlePending 归档，导航返回本身不代表会话可用。
       Promise.resolve()
-        .then(() => (workspacesSvc && typeof workspacesSvc.archiveSession === 'function')
-          ? workspacesSvc.archiveSession(current)
-          : undefined)
         .then(() => (uiWorkspaceSvc && typeof uiWorkspaceSvc.unarchiveSession === 'function')
           ? uiWorkspaceSvc.unarchiveSession(target)
           : undefined)
         .then(() => {
+          unarchived = true
           if (uiWorkspaceSvc && typeof uiWorkspaceSvc.openSession === 'function') uiWorkspaceSvc.openSession(target)
+          navigationReturned = true
           // 会话内容异步替换：两次尝试覆盖「先渲染骨架、后补齐内容」的两拍
           setTimeout(() => restoreAnchor(scroller, anchor), 80)
           setTimeout(() => restoreAnchor(scroller, anchor), 320)
         })
-        .catch((error) => {
-          // 归档可能被官方拒绝（目标会话仍有活动在跑），把原因讲清楚
+        .catch(async (error) => {
+          if (pending === job) {
+            if (job.timer) clearTimeout(job.timer)
+            pending = null
+          }
+          // 只有导航未接受目标时才恢复其原归档态；后续来源归档失败不能把已打开目标收走。
+          if (unarchived && !navigationReturned && targetWasArchived && uiWorkspaceSvc) {
+            try { await uiWorkspaceSvc.archiveSession(target) } catch (e) { /* 来源仍可访问，保留补偿失败现场 */ }
+          }
           showThrottledToast(t('toast.pagerFailed', { error: String(error).slice(0, 120) }))
+          done()
         })
-        .then(done, done)
     }
 
-    return React.createElement('div', { className: 'dsh-recall-pager', ref, 'data-busy': busy ? 'true' : undefined },
+    return React.createElement('div', { className: pagerClass(variant), ref, 'data-busy': busy ? 'true' : undefined },
       React.createElement('button', {
         type: 'button',
         className: 'dsh-recall-pager-btn',
@@ -170,5 +253,13 @@ export function buildVersionPager(
     )
   }
 
-  return { VersionPager }
+  function VersionPager(props: { messageId?: string; sessionId?: string }): import('react').ReactNode {
+    return React.createElement(PagerView, { ...props, variant: 'message' })
+  }
+
+  function VersionHeaderAction(props: { sessionId?: string }): import('react').ReactNode {
+    return React.createElement(PagerView, { ...props, variant: 'header' })
+  }
+
+  return { VersionPager, VersionHeaderAction }
 }
