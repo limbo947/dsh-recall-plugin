@@ -2,9 +2,9 @@
 
 > 用途：dsh 插件开发相关官方文档的本地副本，改代码前优先查这里，避免每次联网翻文档。
 >
-> 归档日期：2026-11-04，对应 [deepseek-harness](https://github.com/deepseek-ai/deepseek-harness) 仓库 `dsh-v0.2.2-rc.1` tag `docs/` 目录（raw.githubusercontent 按 tag 拉取；直连可用，无需代理）。
+> 归档日期：2026-11-12，对应 [deepseek-harness](https://github.com/deepseek-ai/deepseek-harness) 仓库 `dsh-v0.2.2-rc.2` tag `docs/` 目录（raw.githubusercontent 按 tag 拉取；直连可用，无需代理）。
 >
-> 归档 dsh 版本：0.2.2-rc.1（`npm run check:dsh` 的漂移比对基准；重拉镜像后同步更新本字段，见下方「更新方式」）
+> 归档 dsh 版本：0.2.2-rc.2（`npm run check:dsh` 的漂移比对基准；重拉镜像后同步更新本字段，见下方「更新方式」）
 >
 > 在线站点：https://deepseek-harness.github.io/deepseek-harness/ ｜ 每份文件头部都带「来源」注释，可溯回官方原文。
 
@@ -140,3 +140,10 @@ iwr -UseBasicParsing 'https://raw.githubusercontent.com/deepseek-ai/deepseek-har
 > 2026-11-04 十二次重拉（`dsh-v0.2.2-alpha.2` → `dsh-v0.2.2-rc.1`）：**13 源全部逐字节相同**（归一化 CRLF 后比较，delta 均为 0 B）——连续第三轮零差异的前两轮之后再次零差异。
 > 与代码面证据一致：rc.1 的插件系统改动（cordis 4.1.0 配置访问、Session API 独立接口、Projection 异步注册、`tools.resolve`/`executable` 迁移）都落在包实现与 `.d.ts`，`docs/` 侧无措辞调整；本插件消费面（fork/附件/草稿/槽/设置）零破坏。
 > 本轮 Node fetch 直连一次成功，13/13 齐，无需代理或重试，**无文件覆盖**（仅更新头部两字段）。
+>
+> 2026-11-12 十三次重拉（`dsh-v0.2.2-rc.1` → `dsh-v0.2.2-rc.2`）：13 源中 **3 份有差异、10 份逐字节相同**（归一化 CRLF 后比较）。
+> 三处都对应本版客户端/架构侧的能力更新，**无一落在插件消费面**：
+> ① `01-quickstart.md`（+60 B / +1 行）：文档尾部链接「使用其他 CLI 模式」换成「卸载 DSH 桌面端」（`desktop-uninstall-cleanup.zh.md`）——纯导航调整；
+> ② `09-architecture.md`（+14 B / +2 行，三处）：事件域导语由「事件就是扩展点，而选对事件域是大多数改动的第一个决定」改为「事件在三个域内提供扩展点」；AgentLoop 段补「关闭时即使队列清理失败，也会取消并等待当前工作，再释放资源」并新增「Subagent Activation 拥有运行时树成员关系」；Agent Teams 段由「实验性 Agent Teams…持久 roster、任务状态和直接 inbox 消息协作」改为「Agent Teams 在根 Session 开启后提供任务策略和共享任务板」——对应本版 AgentTeam 统一具名子代理与 AgentLoop 关停顺序修复；
+> ③ `11-cookbook-conversation-node.md`（+678 B / +4 行）：Window 更新路径表新增「增量 flush 失败 → 回到已加载完整窗口重建并替换每个 active view，抛 `rebuilt: true` 的 `ConversationUpdateError`」行与不变量第 9 条，另补 `<a id="window-update-paths">` 锚点——对应本版「聊天更新出错后历史加载与新消息持续卡住」修复。
+> 本轮 Node fetch 直连（个别文件需 1–2 次重试），13/13 齐，无需代理；覆盖上述 3 份镜像，其余 10 份未动。评估记录见 [upgrade-assessments/dsh-0.2.2-rc.2.md](../upgrade-assessments/dsh-0.2.2-rc.2.md)。
