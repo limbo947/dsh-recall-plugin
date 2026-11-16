@@ -2,6 +2,26 @@
 
 本文件格式遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循语义化版本。
 
+## [2.6.6] - 2026-11-16
+
+### 修复
+
+- **Windows 沙箱下 home 快照库建不出仓库、降级永不触发（issue #36）**：旧判据用 `New-Item -ItemType Directory -Force`（POSIX 为 `mkdir -p`）探 home 可写性，对**已存在**目录是空操作——沙箱（restricted token + 低完整性）只拒 CREATE_CHILD 时它会谎报成功，于是插件表现为「心跳在更新、每条消息快照全失败、store 目录里只有 heartbeat/root.txt 没有 git/」，README 承诺的降级一次都没发生。现在改为**真写探测**：在目标目录落一个临时文件再删掉，不可写即降级到项目内 `.dsh-recall-snapshots`；探测命令同时回传影子仓库是否存在，供降级安全判定。`ensureGit` 失败后再兜一次：仅当 home store 里连仓库都没有（无仓库＝不可能有快照）时一次性换到工作区 store 并回传生效 store（`init` / 预热 / 两条快照入口都改用它），permission 类失败同时进熔断，不再每条消息白跑一次必败的 `git init`。诊断文案不再把人引向 `icacls`（ACL 实测完全正常），改为指向「沙箱/自动降级/改 `DSH_HOME`」。
+
+### 新增
+
+- **可配置快照存储根（`storeRoot`，issue #36 建议的第三条出路）**：设置卡片「高级设置」新增「快照存储根目录」，填绝对路径即把整个快照库移到该目录（沙箱下 `$DSH_HOME` 彻底不可写时仍可用撤回），留空保持原行为。每个工作区仍按路径哈希分子目录，`exclude.txt` / 快照管理 / 迁移与心跳沿用同一布局；相对路径被端点与运行期双重拒绝并记入「最近错误」，不会静默改道。**保存即生效**（按上次判定所用的根目录比对，一变就失效 stores/容器缓存，不必重启）；**换根不丢历史**——新根还是空库时会把 `$DSH_HOME` 下同工作区的既有快照整仓搬过去（两边都有数据则用新根）。
+- **换库搬迁连带 `lineage.json`**：`migrateScript` 原先只搬 `git/` 与 `index.json`，版本家族（`lineage.json`）会留在旧库导致快照管理退化成普通分组——现在一并搬迁（软失败，被占用不拖垮迁移）。
+
+### 兼容性
+
+- **dsh 0.2.2-rc.2（零破坏，无需改码）**：插件全部调用点（fork 切点与种子、附件回读与草稿回填、消息重绘入口、会话导航与归档、槽注册、设置热更、`/api/recall` 端点）在 rc.2 上逐字节未变；进入邻域的四条演进（Session 批量追加、fork 标题跳号、归档清理 worktree、工具错误收口）逐条排除。核验见 [docs/upgrade-assessments/dsh-0.2.2-rc.2.md](docs/upgrade-assessments/dsh-0.2.2-rc.2.md)，`dshReleases` 台账、`docs/reference/` 镜像与契约文档同步到该版本。
+
+### 测试
+
+- 新增 `tests/unit/store-write-probe.test.js`（探测输出契约、两平台模板形状、`resolveStore` 三种探测结果、`ensureGit` 降级与「有仓库不换」保护、`storeRoot` 派生路径与相对路径拒绝）；`scripts-contract` 的同名导出键集与 `tests/types` 契约随新命令自动覆盖。
+- 新增 `tests/probe/store-probe.test.js`（真实机探针，`npm run test:probe`）：本机 PowerShell 5.1 实测四形态——可写目录 → `PROBE WRITABLE`/`REPO NO` 且不残留临时文件；已建 `git/` → `REPO YES`；不可达盘符 → `NOWRITABLE`/`REPO NO` 且退出码 0（REPO 行的 `Join-Path` 在 EAP=Stop 下曾让整条脚本终止，已加 try/catch）；`icacls /deny user:(AD,WD)` 复现 issue #36 现场 → `NOWRITABLE`/`REPO YES`（旧判据在该目录上会谎报成功）。
+
 ## [2.6.5] - 2026-11-06
 
 ### 修复
