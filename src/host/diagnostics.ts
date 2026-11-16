@@ -51,7 +51,10 @@ const ENV_PATTERNS: Array<[EnvErrorKind, RegExp[]]> = [
 export const ENV_HINTS: Record<EnvErrorKind, string> = {
   git: '未检测到 git CLI 或版本过旧：请安装或升级 git，完成后自动恢复',
   space: '磁盘空间已满，快照写入失败：清理磁盘空间后自动恢复',
-  permission: '快照目录无写入权限：请检查目录权限后重试',
+  // issue #36：Windows 沙箱（restricted token）会在 ACL 完全正常的情况下拒写
+  // ——「请检查目录权限」把人引向 icacls，实测每条 ACE 都是完全控制。文案要
+  // 同时给出真正的两条出路：自动降级（已发生）与手工改 DSH_HOME。
+  permission: '快照目录写入被拒（Windows 沙箱或目录权限）：已自动降级到项目内存储，仍失败请把 DSH_HOME 或「快照存储根」改到可写位置',
   lock: '疑似多个 DSH 实例并发使用同一快照库：请确认只启动了一个；确认后仍失败时，按「设置 · 插件配置 · 最近错误」中的路径删除锁文件',
   mkdir: '快照存储目录被同名文件占用：处理后自动恢复',
   // 实测边界：Windows 上工作区根 ≥260 字符时 git 拒绝索引（\\?\ 前缀只救

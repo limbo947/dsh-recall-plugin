@@ -132,7 +132,7 @@ export const en: Record<string, string> = {
   // ---- init / snapshot-info 说明 ----
   'notice.unsupported': 'The recall plugin supports Windows / Linux / macOS only; snapshots are unavailable on this platform.',
   'notice.gitMissing': 'git CLI not found, so recall is unavailable (the snapshot engine depends on git). Install git and restart DSH to enable it.',
-  'notice.homeFallback': 'The home directory is not writable; snapshots fall back to .dsh-recall-snapshots inside the project.',
+  'notice.homeFallback': 'The snapshot storage location is not writable; snapshots fall back to .dsh-recall-snapshots inside the project.',
   'notice.buildRoot': 'This workspace is a build-artifact directory (path segment {seg}), so project snapshots are skipped; to use recall here, remove that entry from "Base excludes" in the plugin settings.',
 
   // ---- 错误码文案 ----
@@ -235,6 +235,9 @@ export const en: Record<string, string> = {
   'config.retentionDays.label': 'Snapshot retention days',
   'config.retentionDays.hint': 'Delete snapshots older than this; the oldest first; 0 disables it',
   'config.retentionDays.suffix': 'days',
+  'config.storeRoot.label': 'Snapshot storage root',
+  'config.storeRoot.hint': 'Leave empty to keep snapshots under $DSH_HOME (default). An absolute path moves the whole snapshot store there — useful when home is unwritable (e.g. Windows sandbox); each workspace still gets its own hashed subdirectory',
+  'config.storeRoot.placeholder': 'Empty = default location',
   'config.locale.label': 'Language',
   'config.locale.hint': 'auto follows the system language; takes effect after saving (field descriptions rendered by the host-side plugin config form stay in Chinese)',
   'config.locale.auto': 'Follow system (auto)',
@@ -244,7 +247,7 @@ export const en: Record<string, string> = {
   'config.tag.readonly': 'Read-only settings source',
   'config.reset': 'Restore defaults',
   'config.reset.title': 'Restore every field to the plugin factory defaults',
-  'config.advanced.title': 'Advanced: base excludes',
+  'config.advanced.title': 'Advanced',
   'config.baseExcludes.label': 'Base excludes',
   'config.baseExcludes.hint': 'Built-in rules shared by all workspaces; gitignore syntax, one per line; lower priority than exclude.txt in "Exclude config"',
   'config.msg.loading': 'Loading configuration…',
@@ -265,6 +268,7 @@ export const en: Record<string, string> = {
   'config.err.maxSnapshots': 'The snapshot count limit must be an integer >= 0 (0 means unlimited)',
   'config.err.retentionDays': 'Retention days must be an integer >= 0 (0 disables it)',
   'config.err.locale': 'Language must be one of auto / zh / en',
+  'config.err.storeRoot': 'The snapshot storage root must be empty or an absolute path (e.g. D:\\dsh-snap or /data/dsh-snap)',
 
   // ---- 设置页：排除配置卡片 ----
   'exclude.note.home': 'This configuration is shared globally and applies to snapshots in every workspace.',

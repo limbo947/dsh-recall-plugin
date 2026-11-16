@@ -5,7 +5,7 @@
 [![npm version](https://img.shields.io/npm/v/dsh-recall-plugin?style=flat-square&label=npm&color=3178C6)](https://www.npmjs.com/package/dsh-recall-plugin)
 [![npm downloads](https://img.shields.io/npm/dm/dsh-recall-plugin?style=flat-square&label=downloads&color=1F883D)](https://www.npmjs.com/package/dsh-recall-plugin)
 ![License](https://img.shields.io/badge/license-MIT-blue)
-[![DSH](https://img.shields.io/badge/DSH-0.2.2--rc.1-blue)](https://github.com/deepseek-ai/deepseek-harness/releases/tag/dsh-v0.2.2-rc.1)
+[![DSH](https://img.shields.io/badge/DSH-0.2.2--rc.2-blue)](https://github.com/deepseek-ai/deepseek-harness/releases/tag/dsh-v0.2.2-rc.2)
 
 在任意一条你发过的消息下方点「↶ 撤回」——**工作区文件和对话历史一起回到那条消息发出之前的状态**。
 
@@ -45,7 +45,7 @@
 
 - **文件 + 对话，整段回退**：撤回的不只是聊天记录，agent 改过的文件也一并回到原样；不受项目 `.gitattributes` 转换影响，换行与二进制内容字节级保真（2.1.1+）。
 - **只想重来对话？文件可以不动**（2.3.24+）：确认面板可二选一撤回范围——默认「回退文件与对话」为完整回退；「仅撤回对话」则项目文件一个字节都不动（也不打安全快照），适合对回复不满意、但文件改动正是想要内容的场景。
-- **不碰项目自身的 git，目录保持干净**：快照存在独立的影子 git 仓库，分支、暂存区、未提交改动统统不受影响；存储默认落在 `$DSH_HOME` 下、与会话沙箱权限无关（workspace-write / read-only 照常工作），仅当 home 不可写才降级到项目内 `.dsh-recall-snapshots`。
+- **不碰项目自身的 git，目录保持干净**：快照存在独立的影子 git 仓库，分支、暂存区、未提交改动统统不受影响；存储默认落在 `$DSH_HOME` 下，快照命令以宿主身份执行、不借用会话沙箱（workspace-write / read-only 会话照常工作）。**home 真的写不进去时自动降级**到项目内 `.dsh-recall-snapshots` 并在页面提示——判据是「能不能在目录里建出子项」而不是「目录在不在」，所以 Windows 沙箱拒绝新建子项这种情况也能正确降级。
 - **先看清单再动手，可反复后悔**：撤回前展示将变更的文件清单（修改 / 恢复 / 删除），确认后才执行；撤回后还能再撤到更早，被覆盖的文件一直找得回来。
 - **撤回完就能重发**（2.3.15+）：消息的文本与附件（图片、文件）一起放回输入框，改完直接发送，不必重新挑一遍附件。
 - **只改一个字也不用三连**（2.5.0+）：消息旁的「✎ 编辑」在该消息位置长出一张与官方输入框同款的编辑卡（预填原文、随内容增高），**底部输入框保持原样**；卡内可改字、粘贴/拖入附件，按 Enter 或点发送即新建会话、把改后的文本自动发出（原会话照常归档可找回），但**只回退对话、不动项目文件**。原消息附件以可移除的标签显示，权限以只读标签展示，模型与推理等级可在卡内按官方同款菜单切换（同步到底部输入框）；`Esc` 取消。不想立刻发可在设置里关掉「编辑后自动发送」，改为只回填输入框。
@@ -79,6 +79,7 @@
 - 工作区内的**目录重解析点**（junction / 目录符号链接）默认不参与快照：它们指向的子树不会被索引，因此那部分内容不参与回退。win32 上这是必需的——git for Windows 把 junction 当普通目录递归，自引用 junction 会让索引膨胀到 Windows 的 31 层重解析点上限（实测 2 个文件的工作区产出 64 条索引）；POSIX 侧符号链接照常进快照（git 记成 `120000` 条目，不递归进目标）。确需把某个**良性** junction（指向工作区外、非自引用）纳入快照时，可在排除配置里追加 `!路径/`（如 `!ext-link/`）反选恢复——用户排除行在机器生成行之后生效；**切勿对自引用 junction 使用**（爆炸根因）。
 - 文件名含换行/TAB 的极端情形超出 diff 清单的解析能力（概率可忽略）。
 - **与 dsh-routing-suite（渐进式工具披露路由）的交互**：同时启用其 router-standard 预设时，撤回经 `sessions.fork` 出新会话会把路由阶段重置为默认（工具面临时收窄）。现象、成因与解决方案见 [docs/routing-interplay.md](docs/routing-interplay.md)。
+- **与 Forge / Worktree 模式的交互**：在 Forge 工作树承载的会话里撤回，插件会把原会话归档；DSH 0.2.2-rc.2 起官方归档默认清理「本会话创建且未被占用」的工作树目录（分支与提交保留）。需要保留该目录时，在 Worktree 设置里关闭归档清理，或撤回后先解档原会话（版本翻页器切换目标时会自动解档）。
 
 ## 安装
 
@@ -86,7 +87,7 @@
 
 - git CLI：未安装时撤回按钮不出现（页面顶部会提示安装 git），不影响 DSH 运行。
 - shell：Windows 上 PowerShell 5.1 / 7 均可；Linux/macOS 需 bash。
-- DSH 版本：`0.1.2-alpha.1` 至 `0.2.2-rc.1`；已核验 minor 线内的后续版本自动放行，未核验的新 minor 线会被启动期兼容门禁拦截（开窗机制见下方折叠块）。
+- DSH 版本：`0.1.2-alpha.1` 至 `0.2.2-rc.2`；已核验 minor 线内的后续版本自动放行，未核验的新 minor 线会被启动期兼容门禁拦截（开窗机制见下方折叠块）。
 - **0.1.7-alpha.1 是破坏性版本**（shell 执行与 settings 面接口更换），插件内置双分支共存适配：同一发布同时兼容 0.1.2–0.1.6 各线与 0.1.7+，老版本 DSH 上行为不变。
 - `0.1.1-rc.2` 及更早不支持：那条线的客户端运行时没有 `sessions`/`workspaces`/`uiWorkspace` 服务，插件 UI 会静默不渲染。
 
@@ -167,6 +168,7 @@ peerDependencies 按 minor 版本线开窗，与 `dsh.compatibility.dshReleases`
 | `archiveOriginal` | true | 撤回后归档原会话（关闭后原会话保留在会话列表中） |
 | `editSubmitsImmediately` | true | 「编辑并重发」提交后自动发出改后的消息；关闭则只回填输入框，由你按回车发送 |
 | `locale` | auto | 界面语言：`auto` 跟随系统（`navigator.language` 以 `zh` 开头用中文，否则英文）、`zh` / `en` 显式锁定。见下方「界面语言」 |
+| `storeRoot` | `''`（空） | 快照存储根目录（绝对路径）。留空＝放在 `$DSH_HOME` 下；填了就整个快照库改到该目录（如 Windows 沙箱下 home 不可写时）。每个工作区仍按路径哈希分子目录；保存即生效，且**新根为空库时会把 home 下同工作区的既有快照整仓搬过去**（两边都有则用新根）。相对路径会被忽略并记入「最近错误」 |
 
 设置卡片另提供「恢复默认」（一键重置全部字段）与「最近错误」查看/清空。
 
@@ -201,6 +203,8 @@ peerDependencies 按 minor 版本线开窗，与 `dsh.compatibility.dshReleases`
 
 **消息旁没有「↶ 撤回」按钮？** 按概率排查：① 装完没重启 DSH 进程——重启后硬刷新页面（Ctrl+Shift+R）；② git CLI 不在 PATH——页面顶部会有安装提示；③ 该消息发送于插件启用之前——快照只在消息发送时创建，历史消息无快照；④ 该工作区被停用快照——工作区开在 `dist/`、`target/` 这类命中基础排除表目录形态的位置，或超出 `maxWorkspaceBytes` / `scanBudgetMs` 护栏，或快照前的范围统计本身失败（`git ls-files` 报错，原因见「最近错误」，10 分钟后自动重试）；最近消息上会给出恢复提示（调大上限或补充排除表后自动恢复）。
 
+**提示「快照目录写入被拒」，但目录权限看着完全正常？** Windows 沙箱（restricted token / 低完整性）会在 ACL 无可挑剔的情况下拒绝在 home 下新建子项——`icacls` 显示全是继承的完全控制，却连 `New-Item` 一个新目录都失败。插件会检测到这种「目录在、写不进」的情况并自动降级到项目内 `.dsh-recall-snapshots`，页面同时给出降级提示，撤回照常可用；如果降级后仍失败（工作区本身只读），二选一：在「设置 → 插件配置 → 撤回插件 → 高级设置」把「快照存储根目录」填成可写路径（保存即生效，不必重启），或把 `DSH_HOME` 指到可写位置后重启 DSH。判据细节见「最近错误」里的 store 探测记录。
+
 **撤回后个别文件没有恢复？** 该文件不在快照里：超过 `maxFileBytes`（默认 8MB）、命中排除表（含 Windows 保留设备名），或位于嵌套 git 仓库 / win32 目录重解析点内（见「已知限制」）。撤回前确认面板的清单就是实际回退范围，以它为准。
 
 **快照占用磁盘太多？** 打开「设置 → 插件配置 → 撤回插件 → 快照管理」查看各工作区占用，可「立即 gc」或按工作区 / 会话 / 单条分级删除；长期可压低 `maxSnapshotsPerWorkspace`、设置 `retentionDays`，或把大目录补进排除表。
@@ -215,7 +219,7 @@ peerDependencies 按 minor 版本线开窗，与 `dsh.compatibility.dshReleases`
 
 每条用户消息发送时（agent 动文件之前），工作区被快照进一个独立的影子 git 仓库；撤回时先打「回退前」安全快照、再用 `git archive` 恢复文件、通过 DSH 官方 `sessions.fork` 机制把会话切到该消息之前。二进制与换行符安全，全程不触碰项目自身的 git 状态。
 
-- 快照存储：home 下 `dsh-recall-snapshots/<SHA256(项目绝对路径)>/`，内含影子 git 仓库（`git/`，tag 名为 `snap-<消息ID>`）、索引文件 `index.json`（消息 ID → 快照时间 / 会话）与撤回链 `lineage.json`。Windows 上脚本走 PowerShell，Linux/macOS 走 bash（按平台自动分叉）。
+- 快照存储：home 下 `dsh-recall-snapshots/<SHA256(项目绝对路径)>/`（配了「快照存储根目录」时改成 `<storeRoot>/dsh-recall-snapshots/<SHA256>/`），内含影子 git 仓库（`git/`，tag 名为 `snap-<消息ID>`）、索引文件 `index.json`（消息 ID → 快照时间 / 会话）与撤回链 `lineage.json`。Windows 上脚本走 PowerShell，Linux/macOS 走 bash（按平台自动分叉）。
 - **Windows 上宿主把 shell 配成 bash 也照常工作**（2.3.22+）：官方 shell 由 profile 注册，win32 上可以只启用 `bash-sandbox`——此时 pwsh 脚本会被 bash 执行而全盘失败。插件首次执行命令前会先探测执行器能否跑 pwsh（哨兵命令），确认是 bash 后改用系统 PowerShell 5.1 直连执行，快照与撤回不受影响；`ctx.shell` 即 pwsh 的常规部署行为不变（探测一次、判为 pwsh 后一切照旧）。
 - 想直接翻历史快照：
 

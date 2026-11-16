@@ -10,6 +10,8 @@
 import { isSafetySnapshotId } from './snapshots.js'
 import { parseExcludeDump } from './dump-parse.js'
 import { resolveSettingsNs } from './config.js'
+// issue #36：显式快照根的绝对路径判据与运行期同源（store.ts 的同一函数）
+import { isAbsoluteDirPath } from './store.js'
 import type { Runtime, SharedState, StoreInfo } from '../types/state.js'
 import type { HostContext, SessionQueryEngine, SettingsService, SessionLogSnapshot } from '../types/dsh-contract.js'
 import type { ResolvedConfig } from '../types/config.js'
@@ -395,6 +397,8 @@ export function createRoutesManage(deps: RoutesManageDeps) {
           retentionDays: cfg.retentionDays,
           // A4：界面语言偏好随 values 下发（设置卡片据此渲染下拉并即时切语言）
           locale: cfg.locale,
+          // issue #36：显式快照根（空串＝按 $DSH_HOME 派生）
+          storeRoot: cfg.storeRoot,
         },
         overridden,
         envLocks,
@@ -449,6 +453,15 @@ export function createRoutesManage(deps: RoutesManageDeps) {
       if (patch.baseExcludes !== undefined) {
         if (!Array.isArray(patch.baseExcludes)) return { ok: false, code: E.RECALL_BAD_TYPE, message: 'baseExcludes 必须是字符串数组' }
         clean.baseExcludes = patch.baseExcludes.filter((p) => typeof p === 'string' && p.trim())
+      }
+      // issue #36：显式快照根。相对路径在此就拒——运行期只会静默忽略它并
+      // 回落到 $DSH_HOME，用户会以为配置生效了却找不到快照在哪
+      if (patch.storeRoot !== undefined) {
+        const v = String(patch.storeRoot == null ? '' : patch.storeRoot).trim()
+        if (v && !isAbsoluteDirPath(v, process.platform === 'win32')) {
+          return { ok: false, code: E.RECALL_BAD_TYPE, message: '快照存储根必须留空（默认）或填绝对路径' }
+        }
+        clean.storeRoot = v
       }
       // locale（A4）：三值白名单在端点侧再收一遍——schema union 已拦非法值，
       // 这里是「直调 API 绕过表单」时的第二道（与其它字段的类型清洗同层）

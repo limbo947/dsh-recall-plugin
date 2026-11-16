@@ -178,6 +178,28 @@ describe('config-card 保存链路', () => {
 
     expect(fetchStub.callsOf('config-get').length).toBe(2)
   })
+
+  // issue #36：快照存储根住在「高级设置」折叠区，展开才渲染；绝对路径进补丁，
+  // 相对路径在前端就被拒（与 host 端点同一判据），不发请求
+  it('快照存储根：绝对路径进补丁，相对路径被拒且不发请求', async () => {
+    const { container, fetchStub } = await mount({ 'config-set': { ok: true } })
+    await click(q(container, '.sec-toggle'))
+    await flush()
+    const input = qid(container, 'dsh-recall-cfg-storeRoot') as HTMLInputElement
+    expect(input).not.toBeNull()
+    expect(input.value).toBe('')
+
+    await typeInto(input, 'relative/dir')
+    await click(q(container, '.dsh-recall-btn-primary'))
+    await flush()
+    expect(fetchStub.callsOf('config-set').length).toBe(0)
+    expect(q(container, '.dsh-recall-ex-status-error')).not.toBeNull()
+
+    await typeInto(qid(container, 'dsh-recall-cfg-storeRoot') as HTMLInputElement, 'D:\\dsh-snap')
+    await click(q(container, '.dsh-recall-btn-primary'))
+    await flush()
+    expect(first(fetchStub.callsOf('config-set')).args.patch).toEqual({ storeRoot: 'D:\\dsh-snap' })
+  })
 })
 
 describe('config-card 恢复默认链路', () => {

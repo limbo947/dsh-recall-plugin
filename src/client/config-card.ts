@@ -55,6 +55,8 @@ export function buildConfigForm(
     editSubmitsImmediately: boolean
     retentionDays: string
     locale: string
+    // issue #36：显式快照根（空串＝按 $DSH_HOME 派生）
+    storeRoot: string
     [key: string]: string | boolean
   }
 
@@ -96,6 +98,8 @@ export function buildConfigForm(
             editSubmitsImmediately: v.editSubmitsImmediately !== false,
             retentionDays: String(v.retentionDays == null ? '' : v.retentionDays),
             locale: typeof v.locale === 'string' && v.locale ? v.locale : 'auto',
+            // issue #36：老 Host 的 values 无该字段 → 空串（默认按 home 派生）
+            storeRoot: typeof v.storeRoot === 'string' ? v.storeRoot : '',
           }
           // 语言随读到的配置落地（设置页立即按新语言渲染）；老 Host 的 values
           // 无 locale 字段时回落 auto（按 navigator.language 解析）
@@ -121,7 +125,7 @@ export function buildConfigForm(
     function save(): void {
       if (state.busy || !draft || !baseline) return
       const patch: Record<string, string | boolean> = {}
-      for (const key of ['gcSnaps', 'gcHours', 'maxFileBytes', 'maxWorkspaceBytes', 'scanBudgetMs', 'snapshotBudgetMs', 'maxSnapshotsPerWorkspace', 'baseExcludes', 'refillDraft', 'snapshotEnabled', 'messageOnly', 'archiveOriginal', 'editSubmitsImmediately', 'retentionDays', 'locale']) {
+      for (const key of ['gcSnaps', 'gcHours', 'maxFileBytes', 'maxWorkspaceBytes', 'scanBudgetMs', 'snapshotBudgetMs', 'maxSnapshotsPerWorkspace', 'baseExcludes', 'refillDraft', 'snapshotEnabled', 'messageOnly', 'archiveOriginal', 'editSubmitsImmediately', 'retentionDays', 'locale', 'storeRoot']) {
         // 按值判空再纳补丁（A6）：draft 是宽松载荷加载来的全量草稿，索引读取
         // 在类型层可能 undefined；未定义的键与基线无从比较，直接跳过（等价于
         // 原实现里「undefined !== 基线值」的隐式行为，只是不再依赖隐式）。
@@ -192,6 +196,16 @@ export function buildConfigForm(
       if (patch.baseExcludes !== undefined) {
         clean.baseExcludes = String(patch.baseExcludes).split('\n').map((l) => l.trim()).filter(Boolean)
       }
+      // issue #36：显式快照根。空串＝默认（home 派生）；非空必须是绝对路径，
+      // 判据与 host 端点同源（win32 盘符/UNC、POSIX 以 / 开头）
+      if (patch.storeRoot !== undefined) {
+        const v = String(patch.storeRoot).trim()
+        if (v && !/^(?:\/|[A-Za-z]:[\\/]|\\\\)/.test(v)) {
+          setState({ busy: false, message: t('config.err.storeRoot'), error: true })
+          return
+        }
+        clean.storeRoot = v
+      }
       setState({ busy: true, message: t('config.msg.saving'), error: false })
       api<ConfigSetResponse>('config-set', { patch: clean }).then((res) => {
         if (res && res.ok) {
@@ -232,6 +246,33 @@ export function buildConfigForm(
             onChange: (e: import('react').ChangeEvent<HTMLInputElement>) => edit(key, e.target.value),
           }),
           opts && opts.suffixKey ? React.createElement('span', { className: 'dsh-recall-cfg-tag' }, t(opts.suffixKey)) : null,
+          changed && !locked ? React.createElement('span', { className: 'dsh-recall-cfg-tag dsh-recall-cfg-tag-modified' }, t('config.tag.modified')) : null,
+          overridden && overridden[key] !== undefined ? React.createElement('span', { className: 'dsh-recall-cfg-tag' }, t('config.tag.overridden')) : null,
+          locked ? React.createElement('span', { className: 'dsh-recall-cfg-tag dsh-recall-cfg-tag-locked' }, t('config.tag.locked')) : null
+        ),
+        React.createElement('div', { className: 'dsh-recall-cfg-hint' }, hint)
+      )
+    }
+
+    // 文本行（issue #36 显式快照根）：与 numRow 同构（标签上提 + 控件行 +
+    // 说明），只是 type=text、无单位后缀。路径本身说明一切，占位符只提示
+    // 「留空＝默认」，不塞示例路径（两个平台写法不同、写一个必误导另一个）
+    function textRow(key: string, label: string, hint: string, placeholder?: string): import('react').ReactNode {
+      const locked = Boolean(envLocks && envLocks[key])
+      const changed = Boolean(draft && baseline && draft[key] !== baseline[key])
+      return React.createElement('div', { className: 'dsh-recall-cfg-row', key: key },
+        React.createElement('span', { className: 'dsh-recall-cfg-label', id: 'dsh-recall-cfg-label-' + key }, label),
+        React.createElement('div', { className: 'dsh-recall-cfg-line' },
+          React.createElement('input', {
+            id: 'dsh-recall-cfg-' + key,
+            'aria-labelledby': 'dsh-recall-cfg-label-' + key,
+            className: 'dsh-recall-cfg-input',
+            type: 'text',
+            value: draft ? draft[key] : '',
+            disabled: locked || !writable,
+            placeholder: placeholder,
+            onChange: (e: import('react').ChangeEvent<HTMLInputElement>) => edit(key, e.target.value),
+          }),
           changed && !locked ? React.createElement('span', { className: 'dsh-recall-cfg-tag dsh-recall-cfg-tag-modified' }, t('config.tag.modified')) : null,
           overridden && overridden[key] !== undefined ? React.createElement('span', { className: 'dsh-recall-cfg-tag' }, t('config.tag.overridden')) : null,
           locked ? React.createElement('span', { className: 'dsh-recall-cfg-tag dsh-recall-cfg-tag-locked' }, t('config.tag.locked')) : null
@@ -371,7 +412,10 @@ export function buildConfigForm(
       // divider：本条是折叠分区列表的首项，上方分界线把「字段表单」与「折叠
       // 分区」分开（否则保存按钮行紧贴折叠头，读起来像同一组字段）
       React.createElement(SectionToggle, { title: t('config.advanced.title'), open: showAdvanced, onToggle: () => setShowAdvanced((v) => !v), divider: true }),
-      showAdvanced ? React.createElement('div', { className: 'dsh-recall-cfg-row', key: 'baseExcludes' },
+      showAdvanced ? [
+        // issue #36：显式快照根也是环境性配置，与基础排除表同住「高级」区
+        textRow('storeRoot', t('config.storeRoot.label'), t('config.storeRoot.hint'), t('config.storeRoot.placeholder')),
+        React.createElement('div', { className: 'dsh-recall-cfg-row', key: 'baseExcludes' },
         // V4：标签上提（与 numRow 同法）；cfg-line 只剩 tags，textarea/hint 通栏
         React.createElement('span', { className: 'dsh-recall-cfg-label', id: 'dsh-recall-cfg-label-baseExcludes' }, t('config.baseExcludes.label')),
         React.createElement('div', { className: 'dsh-recall-cfg-line' },
@@ -392,7 +436,8 @@ export function buildConfigForm(
           onChange: (e: import('react').ChangeEvent<HTMLTextAreaElement>) => edit('baseExcludes', e.target.value),
         }),
         React.createElement('div', { className: 'dsh-recall-cfg-hint dsh-recall-cfg-span' }, t('config.baseExcludes.hint'))
-      ) : null
+        )
+      ] : null
       )
     )
   }

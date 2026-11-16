@@ -40,7 +40,11 @@ export function createEnsureRootReady({ rt, snaps, journal, cfg }: RootReadyDeps
       // 非空断言：resolveStore 恒在 state.stores 写入并返回（含降级兜底），
       // tryUpgradeToHome 只在该 store 存在时返回它——null 不可达（沿用原控制流）
       store = (await rt.tryUpgradeToHome(root))!
-      await rt.ensureGit(root, store)
+      // issue #36：ensureGit 可能把 home store 一次性降级到项目内——init 必须
+      // 用生效的那个 store 继续，否则 notice.homeFallback 会漏报（用户看不到
+      // 降级说明）。失败仍不阻断：错误进最近错误，快照路径会再反馈。
+      const g = await rt.ensureGit(root, store)
+      if (g.store) store = g.store
       await snaps.loadIndex(root, sessionId)
       await snaps.rebuildOrphans(root, sessionId || '')
       // A3：拒写态下跳过恢复——reset 是写操作，fail-closed 同样适用

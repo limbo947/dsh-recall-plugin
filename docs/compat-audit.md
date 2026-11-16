@@ -7,6 +7,22 @@
 >
 > 出处标注为 2026-09-01 核验（alpha.3）；每次 dsh 升级后按「复查动作」更新本节「核验日期」。
 >
+> **0.2.2-rc.2 核验（2026-11-12）——零破坏版本（已实装）：改版面很宽（21 位贡献者），但插件消费面逐字节未变；四条演进进入邻域、逐条排除**：
+> **版本链路**：`0.2.2-rc.1`(11-04) → `rc.2`(11-11)，单版增量（中间无其他版本）。release notes 56 条（3 新增 / 27 优化 / 26 修复 / 20 其他含 Breaking 与迁移）。
+> **核验方式**：release notes 逐条筛查 + **两棵实装树逐文件 SHA256**（旧实装目录改名作基线、新装对比；包集合 **329 → 336**；排除 `*.map` 后 **182 包 `lib`/`dist` 漂移**）+ 消费点 `.d.ts`/实现逐行 diff + 门禁实跑 + 镜像十三次重拉。
+> **消费面逐字节零漂移**：`dsh-shell`（`resolve`/`run`/`execute` 与 `setDraft`/`submit`/`addAttachments`/`snapshot`）、`dsh-client-ui-slots`（槽框架与 priority 冲突机制）、`dsh-settings`（`installSettingsSection`/`installSection`/`register` 与 volatile 热更）、`dsh-host-webserver`（exact 路由注册面）、`dsh-session/fork` 子路径（`buildForkSeed` 整文件）；`dsh-workspace` 的 `archiveSession` 签名与 `ArchiveSessionOptions` 未变（漂移只在归档后续接纳的纯加法事件）；`updateQueue` / `readAttachment` / `createDrafts` 客户端签名与实现未变。
+> **进入邻域的四条演进（均零影响）**：
+> ① **Session 批量追加事件**（notes 五-13）——`Session.append` 新增数组重载（首参非字符串走 `#appendEvents`）+ `SurfaceManager.prepareBatch`；`session/event` 仍**逐事件**派发（同一批内每事件一次），只是 `session.seq` / `session.surface` 已按完整 batch 提交。插件 handler 只读 `event.type` / `event.data.id` / `data.source.kind` / `event.time` / `session.header.origin`，不读 `seq` 与 `surface`，也从不调用 `append` → 零影响（`dsh-session` 的 7 个漂移文件全在批量接口与类型面）。
+> ② **fork 标题编号跳号**（notes 四-11）——`increasedForkTitle(title, taken)` 改为跳过 Host 已用编号，但调用点在 `sourceTitle !== undefined` 分支（即传 `increaseTitle` 的「复制会话」）；插件不传该选项、子会话标题保持继承 → 行为不变。
+> ③ **归档会话默认清理 Git 工作树**（notes 五-2）——清理由 `dsh-experimental-worktree` 的 `WorktreeReclamation` 监听 `workspace/session-archived` 执行，判据是会话 projection 里 `created` 且 `owned` 的 worktree、并过 `unused()` 检查；普通项目目录与普通会话不在其列。插件归档仍调 `workspaceRegistry.archiveSession(id, { stopActivity: true })`，`dsh-workspace` 只新增 `workspace/session-archived` / `workspace/session-unarchiving` 两个 `parallel` 事件与「durability → 停止请求 → 后续工作接纳」的返回语义 → 对非 worktree 会话零影响；Forge/Worktree 会话被撤回时的目录清理是官方归档语义，非本插件引入（本机 profile 未启用该能力），用户面提示已写入 `README.md` / `README.en.md`「已知限制」。
+> ④ **工具错误类型细化 + `HarnessError` 收口**（notes 五-14）——新包 `dsh-error`；`dsh-attachment` 的 `AttachmentError` 由裸 `Error` 改为继承 `HarnessError`（`code` 与 `ATTACHMENT_ERROR_CODES` 集合未变），`dsh-shell-env` 同款。插件附件回读失败按 `code` 降级（`draft-fill` 完整引用 → 裸 id 探测回退，逐项 try/catch），不依赖原型链 → 零影响。
+> **正向面**：① 可选插件加载失败不再拖垮整页（notes 四-3）——`dsh-client-modules` 的 `ClientEntries` 改为「单行创建失败记日志、留作 inactive entry」，插件加载异常时页面仍可启动；② 已启用但未加载的插件明确标注「未运行」及原因（四-4）——`dsh-client-ui-plugin-manager` 与 `dsh-plugin-manager` 的诊断流；③ 聊天增量更新失败回退完整重建（四-10）——新增 `ConversationUpdateError`（`rebuilt: true/false`）+ 重建窗口重放，插件消息节点随视图重建恢复，不再长期卡住；④ 发送/准备附件期间重试导致的重复提交修复（四-13）与输入提交 `sending` 相位——编辑重发链更稳；⑤ 同一条子代理消息反复唤醒（四-5）与停止任务/关闭会话未中止（四-12）——与插件 `agentBusy` 护栏、jobs 结算唤醒原会话的既有坑同向。
+> **生态新增（纯加法，插件未注册）**：`conversation.chat.markdown.fence`（hoc，按语言扩展代码块）、`conversation.input.model.options`（list，模型菜单尾部选项）、composer 文档级粘贴路由 `registerFileIntake`（官方判据 `EDITABLE = input, textarea, select, [contenteditable]`，插件编辑卡用 `textarea` → 不参与路由）、`InputHub.retry` + `submit(…, allowEmpty)` + `insertQuote(text, summary?)`、`ConversationSessionHeaderSlotProps` 增 `PropsRenderFactories`。
+> **客户端产物压缩化（哈希噪声，非契约变更）**：本版官方把多数 `client.js` 压成单行（`window.__ModuleLoader__.load({id, factory})` 形态未变），逐字节哈希会大面积误报；核验时已排除 `*.map` 并逐包核对注册首行，`ChatViewInjected.consumeOlder` 与新槽是唯一有语义的客户端差异。
+> **包集合 329 → 336**：移除 7（`dsh-experimental-agent-team` 五包合并为 `dsh-agent-team` / `dsh-tool-agent-team` / `dsh-client-ui-agent-team`；`dsh-api-account-controller` + `dsh-deepseek-account-platform` 并入 `dsh-client-ui-account-notifications`；`dsh-office-to-pdf` 由 `dsh-office-kit` / `dsh-tool-office` / `libreoffice-kit-wasm` 取代）；新增 13（Computer Use 三包回归、`dsh-mcp-manager`、`dsh-terminal-panel`、`dsh-error`、`dsh-util-ripgrep` 等）——均不在插件调用点。
+> **第三方依赖与运行时**：cordis `4.1.0`、schemastery `3.19.0`、Node `>=24.9.0` 与 rc.1 完全一致（peer 的 `^4.0.1` / `^3.18.1` 与 `>=0.2.2-alpha.1 <0.3.0` 天然覆盖，**无需追加段**）。**事件集** 62 → 63（新增 `team/mode`）。
+> **实装与门禁（同日）**：`npm install -g @deepseek-ai/dsh@0.2.2-rc.2`（added 670 packages / 4m，无旧目录回收告警），`dsh --version` 与包内 `package.json` 双确认；`typecheck` OK、单测 **597**、client **142**、probe **59/59**、`verify:host` 全过（inject=shell,sessions,agents、端点 13 项）、`check:dsh` 六 peer 全满足（镜像与契约字段回填后全绿）；镜像十三次重拉 13 源中 3 份差异（01/09/11，均不落插件消费面）。记录归口 [upgrade-assessments/dsh-0.2.2-rc.2.md](./upgrade-assessments/dsh-0.2.2-rc.2.md)。
+>
 > **0.2.2-rc.1 核验（2026-11-04）——零破坏版本（已实装）：89 包漂移全部不触插件调用点、peer 窗口无需追加、无需改码**：
 > **版本链路**：`0.2.2-alpha.2`(10-28) → `rc.1`(11-04)，单版增量（中间无其他版本）。
 > **核验方式**：release notes + **两棵实装树逐文件 SHA256**（旧实装目录改名作基线、新装对比；包集合 **329 → 329**，新增 `dsh-client-ui-context-menu` / `dsh-client-ui-file-actions` / `dsh-fs-patch`、移除 `dsh-computer-use` / `dsh-cua` / `dsh-cua-bundle`；**89 包 `lib`/`dist` 漂移**）+ 消费点 `.d.ts`/实现逐行 diff + 门禁实跑 + web 宿主冒烟。
@@ -1728,6 +1744,36 @@
 - **复查动作**：跑 `test:probe` 的 header.actions 断言与 `test:client` 的版本翻页器用例；
   官方若把该槽改 scope / kind 或从会话头 renderSlots 移除，先确认消息区入口是否足以覆盖
   异常会话，再决定替代槽位（不得回到依赖消息 DOM 推断 sessionId）。
+
+
+### I48 `danger-full-access` 只是请求值，不是运行时保证：存储位置只由真写探测决定（issue #36）
+
+- **依赖的官方行为（只到契约层）**：`ShellExecRequest.sandboxPolicy: { mode: 'danger-full-access', workspaceRoot }`
+  在 0.2.x 仍是合法形态（I38 已核）；`dsh-sandbox` 的 `SandboxMode` 联合与 `read-only → workspace-write →
+  danger-full-access` 的升级链仍在。
+- **取证结论（源码级，2026-11-16 从 npm 拉 `@deepseek-ai/dsh-pwsh-sandbox@0.2.2-rc.1` 与
+  `dsh-pwsh-local@0.2.2-rc.1` 的 `lib/index.js` 比对）**：`pwsh-sandbox` 的
+  `resolve(request)` 把 `request.sandboxPolicy` **原样盖上**（`??` 才回落部署策略）；
+  `execute(spec)` 里 `mode === 'danger-full-access'` 直接 `super.execute(spec)`、**不调
+  `confine()`**，并上报 `sandbox: { mode, denied: false }`。Windows 的 confinement 只在
+  `workspace-write` / `read-only` 下经 `ctx.sandbox` 的 ACL restricted-token runner 生效
+  （包内注释自述「on Windows resolves to the ACL restricted-token runner」）。`pwsh-local`
+  不施加任何限制（只把 `sandboxPolicy` 透传，注释自述 confining 由子类负责）。
+  **即：请求 `danger-full-access` 时执行器层是放行的**，issue #36 的「home 建不出子项」不可能
+  来自执行器对该请求的夹紧。
+- **仍然未知**：那层实际拒写的位置——最可能是**宿主进程自身**跑在受限令牌/容器里（子进程继承，
+  与此处策略无关），或桌面端另挂了一套 ACL 沙箱器件；两者的开关与作用面需在真机取证。
+  `docs/upgrade-assessments/dsh-0.2.2-rc.1.md` 的「零破坏」只覆盖包/API 漂移，不覆盖运行时环境。
+- **插件对策（不再依赖该请求成功）**：存储位置由 `storeProbeScript` 的真写探测判定
+  （`PROBE WRITABLE|NOWRITABLE` + `REPO YES|NO`）；不可写即降级到项目内 `.dsh-recall-snapshots`，
+  `ensureGit` 失败再兜一次（仅当 home store 无仓库时）。`storeRoot` 配置提供用户显式改道的出口。
+- **失效症状**：`/api/recall/status` 反复出现 `recall ensureGit failed: … cannot mkdir … Permission denied`，
+  store 目录里只有 `heartbeat`/`root.txt` 而无 `git/`——心跳能写是因为覆盖已存在文件，与「能否新建子项」无关。
+- **复查动作**：拿到能复现的 Windows 沙箱环境时，用 `tests/probe/store-probe.test.js` 的同一手法
+  （`icacls /deny user:(AD,WD)`）对照；再看两层事实——①执行器 `get sandboxMode()` 与 profile 的挂载
+  组合（`pwsh-sandbox` 下应为 `workspace-write`，但请求仍走 unconfined 分支）；②宿主进程自身的
+  令牌/完整性级别（`whoami /groups`、进程 integrity level）。若确认是宿主级封装无差别拦截，
+  这属上游设计面，插件侧只保留「探测 + 降级 + `storeRoot`」三件套。
 
 
 ## 与 E1 verify-host 的对应关系

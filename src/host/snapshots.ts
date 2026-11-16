@@ -827,6 +827,8 @@ export function createSnapshots(ctx: HostContext, rt: Runtime, config: ResolvedC
       setFeedback(messageId, { failed: true, ...buildFeedbackError(g.error || '未知原因') })
       return
     }
+    // issue #36：ensureGit 可能已把 store 降级到项目内，后续命令必须用生效的那个
+    if (g.store) store = g.store
     await loadIndex(root, sessionId)
     state.snapshots.set(String(messageId), { root, time: time || Date.now(), sessionId, files: false })
     await saveIndex(root, sessionId)
@@ -869,14 +871,20 @@ export function createSnapshots(ctx: HostContext, rt: Runtime, config: ResolvedC
     // snapFeedback，客户端空轮询 20 次后放弃、用户零感知。现在走与
     // snapshotScript 失败相同的反馈通道——buildFeedbackError 把原始
     // stderr 分类成可行动提示（锁冲突/磁盘满等），客户端轮询到 failed
-    // 即弹「快照失败：<提示>」并停止轮询。不接熔断：环境类失败常可自愈
+    // 即弹「快照失败：<提示>」并停止轮询。一般不进熔断：环境类失败常可自愈
     // （清磁盘/退锁后下一条消息即恢复），保持按消息重试，刷屏由
     // recordError 尾部去重与 toast 10min 节流缓解。
+    // issue #36 例外：permission 类不会自愈——沙箱 token/策略整场固定，
+    // 逐条消息重试一次必败的 git init 只白付进程开销，直接进熔断退避。
     const g = await rt.ensureGit(root, store)
     if (!g.ok) {
-      setFeedback(messageId, { failed: true, ...buildFeedbackError(g.error || '未知原因') })
+      const failure = buildFeedbackError(g.error || '未知原因')
+      setFeedback(messageId, { failed: true, ...failure })
+      if (failure.kind === 'permission') await handleSnapshotFailure(root, null)
       return
     }
+    // issue #36：ensureGit 可能已把 store 降级到项目内，后续命令必须用生效的那个
+    if (g.store) store = g.store
     await loadIndex(root, sessionId)
     // issue #29：失败耗时是「昂贵失败」的判定依据（见 EXPENSIVE_FAIL_MS）
     const captureStartedAt = Date.now()

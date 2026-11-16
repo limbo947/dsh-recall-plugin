@@ -62,6 +62,7 @@ describe('createConfig', () => {
       editSubmitsImmediately: true,
       retentionDays: 0,
       locale: 'auto',
+      storeRoot: '',
     })
   })
 
@@ -193,7 +194,20 @@ describe('createConfig', () => {
       editSubmitsImmediately: fresh.editSubmitsImmediately,
       retentionDays: fresh.retentionDays,
       locale: fresh.locale,
+      storeRoot: fresh.storeRoot,
     })
+  })
+
+  // issue #36：显式快照根只做归一（去空白/去尾随分隔符），绝对性在 store.ts
+  // 的使用点判定——加载期判死会让「配置错了」表现为插件整体不工作
+  it('storeRoot：去空白与尾随分隔符，非字符串回落空串（issue #36）', () => {
+    expect(createConfig({ storeRoot: '  D:\\dsh-snap  ' }).storeRoot).toBe('D:\\dsh-snap')
+    expect(createConfig({ storeRoot: '/data/snap/' }).storeRoot).toBe('/data/snap')
+    expect(createConfig({ storeRoot: '/' }).storeRoot).toBe('/')
+    // 盘根去尾随分隔符会变 drive-relative，必须补回（否则使用点判非法）
+    expect(createConfig({ storeRoot: 'D:\\' }).storeRoot).toBe('D:\\')
+    expect(createConfig({ storeRoot: 42 }).storeRoot).toBe('')
+    expect(createConfig({}).storeRoot).toBe('')
   })
 
   it('raw 非对象（null/string）按空配置处理', () => {

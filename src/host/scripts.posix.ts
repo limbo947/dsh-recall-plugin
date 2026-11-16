@@ -305,6 +305,24 @@ export function mkdirScript(dir: string): string {
   return 'mkdir -p -- ' + psq(dir)
 }
 
+// 存储可写性探测（issue #36）：`mkdir -p` 对已存在目录是空操作，证明不了
+// 「能在里面建子项」——受限 token 恰恰只拒后者，降级于是永不触发。这里真的
+// 落一个临时文件再删掉；REPO 行把「影子仓库是否已存在」一并回传，宿主侧据此
+// 判断换 store 会不会把历史快照换没。RCL_STORE_PROBE 注释是单测/分发标记。
+export function storeProbeScript(dir: string): string {
+  return [
+    '# RCL_STORE_PROBE',
+    'd=' + psq(dir),
+    'probe=NOWRITABLE',
+    'mkdir -p -- "$d" 2>/dev/null || true',
+    'if : > "$d/.recall-write-probe" 2>/dev/null; then',
+    '  if rm -f -- "$d/.recall-write-probe" 2>/dev/null; then probe=WRITABLE; fi',
+    'fi',
+    'echo "PROBE $probe"',
+    'if [ -d "$d/git" ]; then echo "REPO YES"; else echo "REPO NO"; fi'
+  ].join('\n')
+}
+
 // 旧版迁移：把降级时代落在项目内的影子仓库整体搬回 home 并删源目录
 export function migrateScript(src: string, dst: string): string {
   return [
@@ -313,6 +331,8 @@ export function migrateScript(src: string, dst: string): string {
     'dst=' + psq(dst),
     'if [ -e "$src/git" ]; then mv -f "$src/git" "$dst/git"; fi',
     'if [ -e "$src/index.json" ]; then mv -f "$src/index.json" "$dst/index.json"; fi',
+    // lineage.json（版本家族）随仓搬；软失败（被占用/跨设备）不拖垮整条迁移
+    'if [ -e "$src/lineage.json" ]; then mv -f "$src/lineage.json" "$dst/lineage.json" || true; fi',
     'rm -rf -- "$src"',
     'echo MIGRATE_OK'
   ].join('\n')

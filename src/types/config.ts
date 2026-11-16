@@ -32,6 +32,10 @@ export interface ResolvedConfig {
   editSubmitsImmediately: boolean
   retentionDays: number
   locale: LocalePref
+  // issue #36：显式快照根（绝对路径）。空串＝沿用 $DSH_HOME（未设置时 ~/.dsh）
+  // 派生；设置后在 <storeRoot>/dsh-recall-snapshots/<工作区 SHA256>/ 建仓——
+  // 沙箱下 home 彻底不可写时，用户仍能把快照库指到任意可写位置。
+  storeRoot: string
 }
 
 export type RawConfig = Partial<ResolvedConfig>

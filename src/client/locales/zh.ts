@@ -139,7 +139,7 @@ export const zh: Record<string, string> = {
   // ---- init / snapshot-info 下发的一次性说明 ----
   'notice.unsupported': '撤回插件仅支持 Windows / Linux / macOS，当前平台的快照不可用。',
   'notice.gitMissing': '未检测到 git CLI，撤回功能不可用（快照引擎依赖 git）。安装 git 并重启 DSH 后即可使用。',
-  'notice.homeFallback': 'home 目录不可写，快照已降级存储到项目内 .dsh-recall-snapshots 目录。',
+  'notice.homeFallback': '快照存储位置不可写（home 或配置的快照根），已降级存储到项目内 .dsh-recall-snapshots 目录。',
   'notice.buildRoot': '当前工作区位于构建产物目录（路径段 {seg}），已跳过项目快照；如需在此目录使用撤回，请在插件设置里从「基础排除表」移除该项。',
 
   // ---- 错误码文案（host 静态 message 的本地化副本；动态细节码不在表内）----
@@ -242,6 +242,9 @@ export const zh: Record<string, string> = {
   'config.retentionDays.label': '快照保留天数',
   'config.retentionDays.hint': '超期快照自动删除最旧的；0 表示不启用',
   'config.retentionDays.suffix': '天',
+  'config.storeRoot.label': '快照存储根目录',
+  'config.storeRoot.hint': '留空＝放在 $DSH_HOME 下（默认）。填绝对路径则整个快照库改到该目录，适合 home 不可写（如 Windows 沙箱）时；每个工作区仍按路径哈希分目录',
+  'config.storeRoot.placeholder': '留空＝默认位置',
   'config.locale.label': '界面语言',
   'config.locale.hint': 'auto 跟随系统语言；保存后生效（宿主侧「插件配置」自带的字段说明仍为中文）',
   'config.locale.auto': '跟随系统 (auto)',
@@ -251,7 +254,7 @@ export const zh: Record<string, string> = {
   'config.tag.readonly': '只读设置源',
   'config.reset': '恢复默认',
   'config.reset.title': '把所有字段恢复到插件出厂默认值',
-  'config.advanced.title': '高级：基础排除表',
+  'config.advanced.title': '高级设置',
   'config.baseExcludes.label': '基础排除表',
   'config.baseExcludes.hint': '各工作区共享的内置规则；gitignore 语法，每行一条；优先级低于「排除配置」的 exclude.txt',
   'config.msg.loading': '正在读取配置…',
@@ -272,6 +275,7 @@ export const zh: Record<string, string> = {
   'config.err.maxSnapshots': '快照总量上限必须是 >= 0 的整数（0 表示不限制）',
   'config.err.retentionDays': '保留天数必须是 >= 0 的整数（0 表示不启用）',
   'config.err.locale': '界面语言必须是 auto / zh / en 之一',
+  'config.err.storeRoot': '快照存储根必须留空或填绝对路径（如 D:\\dsh-snap 或 /data/dsh-snap）',
 
   // ---- 设置页：排除配置卡片 ----
   'exclude.note.home': '此配置全局共享，对所有工作区的快照生效。',

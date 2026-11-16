@@ -453,6 +453,31 @@ export function mkdirScript(dir: string): string {
   return 'New-Item -ItemType Directory -Force -Path ' + psq(dir) + ' | Out-Null'
 }
 
+// 存储可写性探测（issue #36）：`New-Item -Force` 对已存在目录是空操作——目录
+// 在、ACL 看着正常、却一个子项都建不出来（Windows 沙箱 restricted token）时
+// 它会谎报成功，降级永不触发。这里真的落一个临时文件再删掉；REPO 行把「影子
+// 仓库是否已存在」一并回传，宿主侧据此判断换 store 会不会把历史快照换没。
+// RCL_STORE_PROBE 是模板标记（单测分发用），不带 $g 赋值以免进失败清扫路径。
+export function storeProbeScript(dir: string): string {
+  return [
+    '# RCL_STORE_PROBE',
+    "$ErrorActionPreference = 'Stop'",
+    '$d = ' + psq(dir),
+    "$probe = 'NOWRITABLE'",
+    'try {',
+    '  if (-not (Test-Path -LiteralPath $d -PathType Container)) { New-Item -ItemType Directory -Force -Path $d | Out-Null }',
+    "  $tmp = Join-Path $d '.recall-write-probe'",
+    "  Set-Content -LiteralPath $tmp -Value 'ok' -Encoding ascii",
+    '  Remove-Item -LiteralPath $tmp -Force',
+    "  $probe = 'WRITABLE'",
+    "} catch { $probe = 'NOWRITABLE' }",
+    "Write-Output ('PROBE ' + $probe)",
+    // REPO 行必须永不抛：EAP=Stop 下 Join-Path 遇到不存在的盘符会终止整条脚本
+    // （实测 Z: 盘场景），探针就退化成「非零退出」而丢掉已探到的结论
+    "try { if (Test-Path -LiteralPath (Join-Path $d 'git') -PathType Container) { Write-Output 'REPO YES' } else { Write-Output 'REPO NO' } } catch { Write-Output 'REPO NO' }"
+  ].join('\n')
+}
+
 // 旧版迁移：把降级时代落在项目内的影子仓库整体搬回 home 并删源目录
 export function migrateScript(src: string, dst: string): string {
   return [
@@ -461,6 +486,9 @@ export function migrateScript(src: string, dst: string): string {
     '$dst = ' + psq(dst),
     "if (Test-Path -LiteralPath (Join-Path $src 'git')) { Move-Item -LiteralPath (Join-Path $src 'git') -Destination (Join-Path $dst 'git') -Force }",
     "if (Test-Path -LiteralPath (Join-Path $src 'index.json')) { Move-Item -LiteralPath (Join-Path $src 'index.json') -Destination (Join-Path $dst 'index.json') -Force }",
+    // lineage.json（版本家族）也随仓搬：漏搬只是展示退化成普通分组，但用户
+    // 会以为「换库后历史版本没了」；被占用时软失败，不拖垮整条迁移
+    "if (Test-Path -LiteralPath (Join-Path $src 'lineage.json')) { Move-Item -LiteralPath (Join-Path $src 'lineage.json') -Destination (Join-Path $dst 'lineage.json') -Force -ErrorAction SilentlyContinue }",
     'Remove-Item -Recurse -Force -LiteralPath $src -ErrorAction SilentlyContinue',
     "Write-Output 'MIGRATE_OK'"
   ].join('\n')

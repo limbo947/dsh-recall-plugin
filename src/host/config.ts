@@ -66,6 +66,9 @@ export const Config = Schema.object({
   // 给「只想改稿、不立刻发」的用户留一条与撤回回填一致的出口
   editSubmitsImmediately: withVolatile(Schema.boolean().default(true).description('「编辑并重发」提交后自动发出改后的消息（关闭则只回填输入框）')),
   retentionDays: withVolatile(Schema.number().default(0).description('按天数保留快照，超期自动删除；0 表示不启用')),
+  // issue #36：显式快照根。留空＝按 $DSH_HOME 派生（推荐）；沙箱下 home 彻底
+  // 不可写时可指到任意可写位置。相对路径在运行时被忽略并告警（见 store.ts）。
+  storeRoot: withVolatile(Schema.string().default('').description('快照存储根目录（绝对路径，留空＝$DSH_HOME 下按工作区哈希分目录）')),
   // A4：界面语言。union 三值而不是自由字符串——非法配置在加载时响亮失败
   //（合规清单 #3）；description 保持中文是 v1 明示限制：它由宿主官方设置
   // 表单在 host 侧渲染，插件无法本地化（自定义配置卡片不受影响，见 README）
@@ -212,6 +215,7 @@ export const DEFAULTS: ResolvedConfig = {
   editSubmitsImmediately: true,
   retentionDays: 0,
   locale: 'auto',
+  storeRoot: '',
 }
 
 export function createConfig(raw: RawConfig): ResolvedConfig {
@@ -275,5 +279,18 @@ export function createConfig(raw: RawConfig): ResolvedConfig {
   // 值（响亮失败），这里只兜 env 覆盖与旧配置文档缺字段两条路径
   const locale: LocalePref = cfg.locale === 'zh' || cfg.locale === 'en' ? cfg.locale : 'auto'
 
-  return { gcSnaps, gcHours, maxFileBytes, maxWorkspaceBytes, scanBudgetMs, snapshotBudgetMs, maxSnapshotsPerWorkspace, baseExcludes, refillDraft, snapshotEnabled, messageOnly, archiveOriginal, editSubmitsImmediately, retentionDays, locale }
+  // issue #36：显式快照根。只收字符串并去尾随分隔符；是否绝对路径由 store.ts
+  // 在使用点判定（这里静默保留，避免加载期把用户配置判死、连降级都跑不到）。
+  // 根目录会被去成空串/裸盘符（后者是 drive-relative，使用点会判非法），故
+  // 单独兜底：POSIX 的 '/' 原样保留，win32 的 'D:\' 补回分隔符。
+  const storeRoot = (() => {
+    const raw = typeof cfg.storeRoot === 'string' ? cfg.storeRoot.trim() : ''
+    if (!raw) return ''
+    // 盘根（D:\）去尾随分隔符会退化成 drive-relative 的 'D:'，必须补回分隔符
+    if (/^[A-Za-z]:[\\/]*$/.test(raw)) return raw.slice(0, 2) + '\\'
+    const trimmed = raw.replace(/[\\/]+$/, '')
+    return trimmed || raw.slice(0, 1)
+  })()
+
+  return { gcSnaps, gcHours, maxFileBytes, maxWorkspaceBytes, scanBudgetMs, snapshotBudgetMs, maxSnapshotsPerWorkspace, baseExcludes, refillDraft, snapshotEnabled, messageOnly, archiveOriginal, editSubmitsImmediately, retentionDays, locale, storeRoot }
 }

@@ -2,7 +2,8 @@
  * dsh-recall-plugin — 执行与存储层（ctx 绑定的工厂，无模块级副作用）
  *
  * 职责：提供 runShell（宿主身份执行 + 统一编码保证）、会话根目录解析、
- * git 可执行文件探测、home/降级存储解析与迁移、影子仓库初始化（ensureGit）。
+ * git 可执行文件探测、home/降级存储解析与迁移（真写探测，issue #36）、
+ * 影子仓库初始化（ensureGit，含探测通过但写盘被拒时的一次性降级）。
  * 按 process.platform 选择脚本模板（scripts.pwsh.js / scripts.posix.js），
  * 两套模板导出同名接口，本文件用 rt.scripts 统一下发。
  * 产出共享 state（各 Map 缓存）供 snapshots.js / maintenance.js 复用；
@@ -15,7 +16,7 @@ import { spawn as childSpawn } from 'node:child_process'
 import * as pwshScripts from './scripts.pwsh.js'
 import * as posixScripts from './scripts.posix.js'
 import { classifyEnvError } from './diagnostics.js'
-import type { Runtime, SharedState, StoreInfo, ShellRunOptions, ErrorRecord, ShellDialect } from '../types/state.js'
+import type { Runtime, SharedState, StoreInfo, ShellRunOptions, ErrorRecord, ShellDialect, EnsureGitResult } from '../types/state.js'
 import type { PwshScripts, PosixScripts } from '../types/scripts.js'
 import type { HostContext, SessionQueryEngine, ShellExecutor, ShellExecRequest, ShellRunResult } from '../types/dsh-contract.js'
 import type { ResolvedConfig } from '../types/config.js'
@@ -125,6 +126,39 @@ export function judgeShellDialect(res: ShellRunResult | null | undefined): Shell
 
 // 凭证形状 env 名（与官方 dsh-subprocess SENSITIVE_ENV_PATTERN 同式）
 const SENSITIVE_ENV = /KEY|PASSWORD|SECRET|TOKEN/i
+
+// 显式快照根必须是绝对路径（issue #36 第三条出路）：相对路径会让 store 目录
+// 随 cwd 漂移——同一工作区在两条命令里落到不同位置，快照与回退各看各的库，
+// 比不配更糟。win32 认盘符与 UNC，POSIX 只认以 / 开头。
+export function isAbsoluteDirPath(value: unknown, win: boolean): boolean {
+  const s = String(value == null ? '' : value)
+  if (!s) return false
+  if (win) return /^[A-Za-z]:[\\/]/.test(s) || s.startsWith('\\\\')
+  return s.startsWith('/')
+}
+
+// 工作区路径 → store 目录名（SHA256 十六进制）。win32 模板里的哈希用同一份
+// UTF-8 字节，故 Node 侧算出的目录名与 shell 侧逐字节一致（storeRoot 走这里
+// 时省掉一次 PowerShell 往返）。
+export function hashRootPath(root: string): string {
+  return crypto.createHash('sha256').update(String(root), 'utf8').digest('hex')
+}
+
+// 存储可写性探测的解析（issue #36；模块级纯函数，单测直测）：模板输出两行
+// 'PROBE WRITABLE|NOWRITABLE' + 'REPO YES|NO'。缺行/截断一律按「不可写、
+// 无仓库」判——误判成不可写只是降级到项目内存储（功能仍可用），误判成可写
+// 则复现 issue #36 的静默失效，两者代价不对称。
+export interface StoreProbe { writable: boolean; hasRepo: boolean }
+export function parseStoreProbe(text: unknown): StoreProbe {
+  let writable = false
+  let hasRepo = false
+  for (const raw of String(text == null ? '' : text).split(/\r?\n/)) {
+    const line = raw.trim()
+    if (line === 'PROBE WRITABLE') writable = true
+    else if (line === 'REPO YES') hasRepo = true
+  }
+  return { writable, hasRepo }
+}
 
 // stderr 保留字节（错误消息只取尾部 1500 字符，留一个宽裕窗口避免多字节截断）
 const STDERR_KEEP_BYTES = 65536
@@ -319,6 +353,8 @@ export function createRuntime(ctx: HostContext, config: ResolvedConfig, deps?: {
     gcCount: new Map(),
     gitExe: null,
     posixHomeBase: null,
+    // 空串＝按 $DSH_HOME 派生；与 config.storeRoot 比对即可发现热更
+    storeBase: '',
     // win32 方言探针缓存（issue #15）：判定结果 + in-flight promise（并发首调
     // 只跑一次探针）；POSIX 不探测，两字段恒为 null
     shellDialect: null,
@@ -634,11 +670,70 @@ export function createRuntime(ctx: HostContext, config: ResolvedConfig, deps?: {
 
   async function homeDirForPosix(root: string): Promise<string> {
     const base = await posixHomeBaseResolve()
-    const hash = crypto.createHash('sha256').update(root, 'utf8').digest('hex')
-    return base.replace(/\/+$/, '') + '/dsh-recall-snapshots/' + hash
+    return base.replace(/\/+$/, '') + '/dsh-recall-snapshots/' + hashRootPath(root)
+  }
+
+  // 显式快照根（issue #36）：给了合法绝对路径就完全绕过 home 派生——沙箱可能
+  // 连 $DSH_HOME 都建不出子项，而用户指定的目录通常可写。非法值（相对路径）
+  // 忽略并告警：静默改道会让用户以为配置已生效，排查时反而找不到北。
+  function configuredStoreBase(): string | null {
+    const raw = config.storeRoot
+    if (!raw) return null
+    if (!isAbsoluteDirPath(raw, isWin)) {
+      recordError('recall storeRoot is not an absolute path, ignored: ' + raw)
+      return null
+    }
+    return raw
+  }
+
+  // storeRoot 热更（issue #36）：apply 期配置是就地 Object.assign 的，这里能
+  // 直接读到新值；但 stores/容器缓存按 root 存的是旧基底的 store，不失效就会
+  // 一直服务到下次重启（README 承诺的「保存即生效」落空）。git/gc 凭据按键
+  // 存的是旧基底路径，不会再被寻址，一并清掉。
+  function syncStoreBase(): void {
+    const base = config.storeRoot || ''
+    if (state.storeBase === base) return
+    state.storeBase = base
+    state.stores.clear()
+    state.homeContainer = null
+    state.gitReady.clear()
+    state.gcLastAt.clear()
+    state.gcCount.clear()
+  }
+
+  // 换根时的存量搬迁（issue #36）：新基底还没有仓库、而默认 home 位置有同
+  // 工作区的 store 时整仓搬过去——不搬的话用户会以为「改了根目录，快照全没」。
+  // 失败只告警并保持原位（数据留在旧库，快照管理仍看得到）。
+  async function adoptHomeStore(root: string, targetDir: string): Promise<void> {
+    let legacyDir: string | null = null
+    try {
+      legacyDir = isWin ? await homeDirForWin(root) : await homeDirForPosix(root)
+    } catch (error) {
+      legacyDir = null
+    }
+    if (!legacyDir || legacyDir === targetDir) return
+    try {
+      // 先确认旧目录存在：storeProbeScript 会顺手建目录，不该为了「检查」在
+      // home 下留一个空壳
+      const exists = scripts.stripBom(await runShell(scripts.dirExistsScript(legacyDir), { stdoutMaxBytes: 4096 })).trim() === 'YES'
+      if (!exists) return
+      if (!(await probeStore(legacyDir)).hasRepo) return
+      await runShell(scripts.migrateScript(legacyDir, targetDir), { timeoutMs: 300000, stdoutMaxBytes: 4096 })
+      recordError('recall moved existing snapshots into the configured storeRoot: ' + targetDir)
+    } catch (error) {
+      recordError('recall migrate to storeRoot failed (old snapshots kept in place): ' + String(error))
+    }
   }
 
   async function homeDirFor(root: string): Promise<string | null> {
+    const base = configuredStoreBase()
+    if (base) {
+      // 目录结构与 home 派生完全同构（<基>/dsh-recall-snapshots/<hash>）：
+      // resolveHomeContainer 的 65 字符 slice 推导、dump 枚举、迁移与心跳
+      // 都按这个形状工作，配了根目录不需要第二套布局
+      const tail = base.endsWith(SEP) ? '' : SEP
+      return base + tail + 'dsh-recall-snapshots' + SEP + hashRootPath(root)
+    }
     return isWin ? homeDirForWin(root) : homeDirForPosix(root)
   }
 
@@ -650,6 +745,7 @@ export function createRuntime(ctx: HostContext, config: ResolvedConfig, deps?: {
   // （旧实现里 homeDirScript 与 homeContainerScript 的 $h 链靠注释人工
   // 对齐，存在漂移风险）。失败返回 null 且不缓存，下次调用自然重试。
   async function resolveHomeContainer() {
+    syncStoreBase()
     if (state.homeContainer) return state.homeContainer
     let container = null
     try {
@@ -709,10 +805,25 @@ export function createRuntime(ctx: HostContext, config: ResolvedConfig, deps?: {
     writeTextViaShell(store.dir + SEP + 'root.txt', root).catch(() => {})
   }
 
-  // 存储根：优先放 DSH home（保持项目目录干净）。shell 以宿主身份执行，
-  // 受限会话（workspace-write/read-only）也能写 home；只有 home 本身不可写
-  // （如 DSH_HOME 指向只读/网络盘）才降级到项目内（功能优先于干净）。
+  // 真写探测（issue #36）：先前的 mkdirScript 只证明「目录存在」，在 Windows
+  // 沙箱拒 CREATE_CHILD 时它谎报成功，降级永不触发。探测命令自身失败按不可写
+  // 处理——连探都跑不通时，后续写盘同样无法保证，降级是唯一活路。
+  async function probeStore(dir: string): Promise<StoreProbe> {
+    try {
+      const out = scripts.stripBom(await runShell(scripts.storeProbeScript(dir), { timeoutMs: 60000, stdoutMaxBytes: 4096 }))
+      return parseStoreProbe(out)
+    } catch (error) {
+      recordError('recall store probe failed: ' + String(error))
+      return { writable: false, hasRepo: false }
+    }
+  }
+
+  // 存储根：优先放 DSH home（保持项目目录干净）。可用性判据是「真的能建出
+  // 子项」，不是「目录存在」——Windows 沙箱（restricted token / 低完整性）
+  // 下 home 目录可能既存在又可读，却一个子项都建不出来（issue #36 实证），
+  // 只有真写探测能区分。探不出可写就降级到项目内（功能优先于干净）。
   async function resolveStore(root: string): Promise<StoreInfo> {
+    syncStoreBase()
     const cached = state.stores.get(root)
     if (cached) return cached
     let homeDir: string | null = null
@@ -723,16 +834,16 @@ export function createRuntime(ctx: HostContext, config: ResolvedConfig, deps?: {
       homeDir = null
     }
     if (homeDir) {
-      try {
-        await runShell(scripts.mkdirScript(homeDir), { stdoutMaxBytes: 4096 })
+      const probe = await probeStore(homeDir)
+      if (probe.writable) {
+        // 配了 storeRoot 且新基底还是空库时，把默认 home 下的同工作区快照搬来
+        if (!probe.hasRepo && configuredStoreBase()) await adoptHomeStore(root, homeDir)
         const store = makeStore(homeDir, true)
         state.stores.set(root, store)
         persistRootHint(store, root)
         return store
-      } catch (error) {
-        // 已 recordError 告警，落回项目内降级 store 继续（见函数头注释）
-        recordError('recall home store unavailable, falling back to workspace: ' + String(error))
       }
+      recordError('recall home store not writable, falling back to workspace: ' + homeDir)
     }
     const fallback = root + SEP + '.dsh-recall-snapshots'
     await runShell(scripts.mkdirScript(fallback), { stdoutMaxBytes: 4096 })
@@ -746,6 +857,7 @@ export function createRuntime(ctx: HostContext, config: ResolvedConfig, deps?: {
   // 这里在下一条消息快照前把它整体迁回 home 并删除项目内目录，恢复
   // 「项目目录干净」。失败节流 5 分钟，避免 home 不可写时每条消息白试。
   async function tryUpgradeToHome(root: string): Promise<StoreInfo | null> {
+    syncStoreBase()
     const store = state.stores.get(root)
     if (!store || store.home) return store || null
     const now = Date.now()
@@ -760,8 +872,12 @@ export function createRuntime(ctx: HostContext, config: ResolvedConfig, deps?: {
       homeDir = null
     }
     if (!homeDir) return store
+    // 同一条真写探测（issue #36）：不可写就别把注定失败的迁移跑去占 5 分钟超时
+    if (!(await probeStore(homeDir)).writable) {
+      recordError('recall home store upgrade skipped (not writable): ' + homeDir)
+      return store
+    }
     try {
-      await runShell(scripts.mkdirScript(homeDir), { stdoutMaxBytes: 4096 })
       await runShell(scripts.migrateScript(store.dir, homeDir), { timeoutMs: 300000, stdoutMaxBytes: 4096 })
       const upgraded = makeStore(homeDir, true)
       state.stores.set(root, upgraded)
@@ -821,15 +937,51 @@ export function createRuntime(ctx: HostContext, config: ResolvedConfig, deps?: {
     await renameTmpQuietly(tmp, file)
   }
 
+  // ensureGit 失败后的一次性降级（issue #36 兜底）：探测通过但写盘仍被拒时
+  // （沙箱策略可能在两条命令之间变化，或探测命中了别的失败面）换到项目内
+  // store 再试一次。只在 home store 里**连仓库都没有**时换——没有仓库就
+  // 不可能有快照，换过去不丢任何可见历史；有仓库说明历史快照在这，换掉
+  // 等于把它们从列表里换没，宁可按错误上抛。
+  async function downgradeStore(root: string, from: StoreInfo, reason: string): Promise<StoreInfo | null> {
+    if (!from.home) return null
+    if ((await probeStore(from.dir)).hasRepo) {
+      recordError('recall home store unwritable but holds a repo, keeping it: ' + reason)
+      return null
+    }
+    const fallback = root + SEP + '.dsh-recall-snapshots'
+    if (!(await probeStore(fallback)).writable) {
+      recordError('recall workspace store not writable either: ' + fallback)
+      return null
+    }
+    const next = makeStore(fallback, false)
+    state.stores.set(root, next)
+    // 旧 store 的就绪/节流凭据随它一并作废，避免新 store 误读
+    state.gitReady.delete(from.git)
+    state.gcLastAt.delete(from.git)
+    state.gcCount.delete(from.git)
+    // 旧 store 没有仓库 ⇒ 它的 tag 一个都不存在，内存里这些条目全都不可回退：
+    // 清掉并重置索引缓存，让随后 loadIndex 从新 store 重读（降级到二级目录时
+    // 那里可能本来就有合法条目，重读即可恢复，不丢数据）
+    for (const [id, info] of state.snapshots) {
+      if (info.root === root) state.snapshots.delete(id)
+    }
+    state.indexLoaded.delete(root)
+    state.indexHealthy.delete(root)
+    state.indexTruncated.delete(root)
+    recordError('recall switched to workspace store (home store unwritable): ' + fallback)
+    persistRootHint(next, root)
+    return next
+  }
+
   // 建立影子仓库（幂等：gitReady 命中后直接跳过，省掉每条消息一次的
   // config/exclude 重写）。同时回读 gc.stamp 种子化 gc 节流：让「上次 gc
   // 时间」跨重启续存，避免天天重启的机器每开机都来一次全量 gc。
-  // 返回 {ok, error}（M1-D2）：失败原因必须传出——captureSnapshot 要把它
+  // 返回 {ok, error, store}（M1-D2）：失败原因必须传出——captureSnapshot 要把它
   // 分类成 snapFeedback 的可行动提示（此前吞成布尔，客户端空轮询 20 次、
-  // 用户零感知，issue #11 主线缺口）；init/预热调用方忽略返回值，不受形状
-  // 变化影响。
-  async function ensureGit(root: string, store: StoreInfo): Promise<{ ok: boolean; error?: string }> {
-    if (state.gitReady.has(store.git)) return { ok: true }
+  // 用户零感知，issue #11 主线缺口）。store 是本次实际生效的 store（issue #36
+  // 降级后与入参不同），调用方必须改用它继续后续命令。
+  async function ensureGit(root: string, store: StoreInfo, retried = false): Promise<EnsureGitResult> {
+    if (state.gitReady.has(store.git)) return { ok: true, store }
     const gitExe = await resolveGit()
     if (!gitExe) {
       // git 缺失分支：原先静默 return false，连 recordError 都没有（用户
@@ -843,10 +995,16 @@ export function createRuntime(ctx: HostContext, config: ResolvedConfig, deps?: {
       state.gitReady.add(store.git)
       const m = out.match(/GIT_OK\s+(\d+)/)
       state.gcLastAt.set(store.git, m ? parseInt(m[1] ?? '', 10) * 1000 : Date.now())
-      return { ok: true }
+      return { ok: true, store }
     } catch (error) {
       // 失败按未就绪返回（不抛）：已 recordError 告警，调用侧照常发命令、由命令自身报错
       recordError('recall ensureGit failed: ' + String(error))
+      // issue #36：探测通过但写盘被拒（沙箱 token 只拒 CREATE_CHILD 就是这种
+      // 形态），降级到项目内 store 再试一次；retried 保证只降一级、不递归。
+      if (!retried) {
+        const next = await downgradeStore(root, store, String(error))
+        if (next) return await ensureGit(root, next, true)
+      }
       return { ok: false, error: String(error) }
     }
   }

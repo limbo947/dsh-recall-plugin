@@ -60,6 +60,9 @@ export interface SharedState {
   gcCount: Map<string, number>
   gitExe: string | null
   posixHomeBase: string | null
+  // 上次存储位置判定所用的 storeRoot（issue #36 热更依据）：配置卡片改根目录
+  // 时清空 stores/容器缓存重算，避免旧基底的 store 一直服务到下个重启
+  storeBase: string
   // 方言探针缓存：判定结果 + in-flight promise（并发首调只跑一次探针）；
   // POSIX 不探测，两字段恒为 null
   shellDialect: ShellDialect | null
@@ -77,10 +80,13 @@ export interface ShellRunOptions {
 }
 
 // ensureGit 结果（M1-D2：失败原因必须传出——captureSnapshot 分类成
-// snapFeedback 的可行动提示；init/预热调用方忽略返回值）
+// snapFeedback 的可行动提示；init/预热调用方忽略返回值）。
+// store（issue #36）：home 不可写时 ensureGit 会降级到项目内 store 再试，
+// 这里回传实际生效的那个——调用方必须用它继续后续命令，不能用旧变量。
 export interface EnsureGitResult {
   ok: boolean
   error?: string
+  store?: StoreInfo
 }
 
 // Runtime（rt）接口——store.js createRuntime 返回，M6 按六文件实际消费面定稿：
@@ -101,7 +107,8 @@ export interface Runtime {
   resolveStore(root: string): Promise<StoreInfo>
   storeFromDir(dir: string, home: boolean): StoreInfo
   tryUpgradeToHome(root: string): Promise<StoreInfo | null>
-  ensureGit(root: string, store: StoreInfo): Promise<EnsureGitResult>
+  // retried：内部单次降级重试用（issue #36），调用方不传
+  ensureGit(root: string, store: StoreInfo, retried?: boolean): Promise<EnsureGitResult>
   cleanupLegacy(root: string): void
   cleanupAfterGitFailure(command: string): Promise<void>
 }
