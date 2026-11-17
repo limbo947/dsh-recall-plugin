@@ -2,9 +2,9 @@
 
 > 用途：dsh 插件开发相关官方文档的本地副本，改代码前优先查这里，避免每次联网翻文档。
 >
-> 归档日期：2026-11-12，对应 [deepseek-harness](https://github.com/deepseek-ai/deepseek-harness) 仓库 `dsh-v0.2.2-rc.2` tag `docs/` 目录（raw.githubusercontent 按 tag 拉取；直连可用，无需代理）。
+> 归档日期：2026-11-17，对应 [deepseek-harness](https://github.com/deepseek-ai/deepseek-harness) 仓库 `dsh-v0.2.2-rc.3` tag `docs/` 目录（raw.githubusercontent 按 tag 拉取；直连可用，无需代理）。
 >
-> 归档 dsh 版本：0.2.2-rc.2（`npm run check:dsh` 的漂移比对基准；重拉镜像后同步更新本字段，见下方「更新方式」）
+> 归档 dsh 版本：0.2.2-rc.3（`npm run check:dsh` 的漂移比对基准；重拉镜像后同步更新本字段，见下方「更新方式」）
 >
 > 在线站点：https://deepseek-harness.github.io/deepseek-harness/ ｜ 每份文件头部都带「来源」注释，可溯回官方原文。
 

@@ -2,6 +2,21 @@
 
 本文件格式遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循语义化版本。
 
+## [2.6.7] - 2026-11-17
+
+### 兼容性
+
+- **dsh 0.2.2-rc.3（零破坏、零改码）**：rc.3 相对 rc.2 只有 6 个 commit，其中 3 个是 release/CI/桌面安装器，实质代码变更仅 1 个新实验包 `dsh-deepseek-chat-import` 及其为自身接入所做的**纯加法**改动（`workspace.picker` Component Factory、第三个 directory-flow 洞、`sidebar.session.action` hoc 槽、2 个 upload 图标、`RemoteErrorDetailsMap` 加一行）。插件五个注册槽均不涉及新增键；**21 个消费包逐字节相同**（`dsh-session` / `dsh-session-query` / `dsh-shell` / `dsh-sandbox-policy` / `dsh-settings` / `dsh-client-ui-slots` / `dsh-client-ui-chat` / `dsh-workspace` / `dsh-api-workspace-controller` 等）；`Session.append` 批量重载、`session/event` 逐事件派发、`buildForkSeed` 切点、`fork` 标题逻辑、`archiveSession(id, { stopActivity: true })` 签名与语义全部未变。核验见 [docs/upgrade-assessments/dsh-0.2.2-rc.3.md](docs/upgrade-assessments/dsh-0.2.2-rc.3.md)，镜像 13 源重拉逐字节相同，`dshReleases` 台账、契约文档与 README 双语同步。
+
+### 变更
+
+- **启动预热跳过「从没建过快照库」的工作区（issue #24 遗留项）**：误开过的空会话（issue #24 报告者的下载目录：会话日志只有一行 header、零 `user/message`）此前每次 DSH 启动都被完整走一遍 `resolveStore → git init → rebuildOrphans`，重启后单核再次打满。现在预热前先判「磁盘上到底有没有这个工作区的 store 目录」：有就照常预热（索引/孤儿/崩溃恢复照跑），没有就跳过——首条消息的快照链自己会建库，`init` 端点与预热共享 `ensureRootReady` 也不受影响。判据**全程 Node fs、零 shell 进程**（为它再起 pwsh 就把省下的开销原样还回去了）：候选 home 容器按三档回退同式枚举（`$DSH_HOME` → `~/.dsh` → I24 旧位 `~/`）逐个 stat，命中的再按 `<容器>/<SHA256(root)>` 与项目内 `.dsh-recall-snapshots` 判存在。探到非 ENOENT 错误（权限/IO）说明「探不清」，fail-open 退回全量预热；配了 `storeRoot` 时不剪枝（换根搬迁挂在 `resolveStore` 上，预热是它唯一的启动期触发点）。
+
+### 测试
+
+- 新增 `tests/unit/warmup-prune.test.js`（9 例）：命中面（home 容器哈希子目录 / 项目内降级目录 / 多档容器）、尾部斜杠与 win32 大小写归一、POSIX 大小写敏感、`storeRoot` 不剪枝、空列表零探测、权限错 fail-open；并用「shell 一被调用就抛错」的桩钉住**零进程**这条不变量。
+- 本机真实数据核验：home 下 11 个既有工作区全部保留、虚构工作区被剪掉，判定耗时 3ms、零 shell 进程；Node 侧 `hashRootPath` 与既有 11 个 store 目录名逐一比对全等（哈希口径未漂移）。
+
 ## [2.6.6] - 2026-11-16
 
 ### 修复

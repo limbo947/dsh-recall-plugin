@@ -111,4 +111,7 @@ export interface Runtime {
   ensureGit(root: string, store: StoreInfo, retried?: boolean): Promise<EnsureGitResult>
   cleanupLegacy(root: string): void
   cleanupAfterGitFailure(command: string): Promise<void>
+  // issue #24 遗留项：预热剪枝——返回「磁盘上已有快照库目录」的 root 子集
+  // （home 容器哈希子目录或项目内降级目录）；探测失败 fail-open 返回全量。
+  rootsWithExistingStore(roots: string[]): Promise<Set<string>>
 }

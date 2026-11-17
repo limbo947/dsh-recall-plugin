@@ -498,10 +498,18 @@ export function apply(ctx: HostContext, config: ResolvedConfig) {
         }
       } catch (error) { /* 冷元数据不可用则退回 live 注册表 */ }
     }
+    // issue #24 遗留项：从来没有快照库的工作区不预热。误开过的空会话（报告者
+    // 的 1.9GB 下载目录：会话日志只有一行 header、零 user/message）每次启动都
+    // 被完整走一遍 resolveStore + git init + rebuildOrphans，重启后 CPU 再次打满。
+    // 判据只看「磁盘上有没有 store 目录」，在就照常预热（索引/孤儿/崩溃恢复仍要
+    // 跑），不在就跳过——首条消息的快照链自己会建库，init 与预热共享
+    // ensureRootReady 也不受影响。探测本身失败 fail-open 退回全量预热。
+    const existing = await rt.rootsWithExistingStore(Array.from(warmupRoots.keys()))
+    const pruned = Array.from(warmupRoots).filter(([cwd]) => existing.has(cwd))
     // issue #24：预热链限流两路并发——每个工作区一条链、每链数条 shell 命令
     // （每条一个 pwsh 进程），7 个工作区全并发会在启动期叠出数十个进程把
     // 单核打满。链本体经 ensureRootReady 与 init 端点共享（同 root 只跑一次）。
-    const warmupTasks = Array.from(warmupRoots, ([cwd, sessionId]) => () =>
+    const warmupTasks = pruned.map(([cwd, sessionId]) => () =>
       ensureRootReady(cwd, sessionId || '')
         .then(() => {})
         .catch(() => {}) // 预热链失败整体吞掉（不刷启动噪音，原语义）

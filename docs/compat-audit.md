@@ -7,6 +7,13 @@
 >
 > 出处标注为 2026-09-01 核验（alpha.3）；每次 dsh 升级后按「复查动作」更新本节「核验日期」。
 >
+> **0.2.2-rc.3 核验（2026-11-17）——零破坏、零改码（已实装）**：
+> **版本链路**：`0.2.2-rc.2`(11-12) → `rc.3`，单版增量。release notes 仅 2 条（1 新增 + 1 修复）。
+> **核验方式**：release notes 逐条筛查 + **两棵实装树逐文件 SHA256**（排除 `*.map`）+ 消费点 `.d.ts`/实现逐行 diff + 门禁实跑 + 镜像 13 源重拉。
+> **结论**：6 个 commit 中 3 个是 release/CI/桌面安装器，实质代码变更仅 1 个新实验包 `dsh-deepseek-chat-import` 及其为自身接入所做的**纯加法**改动（`workspace.picker` Component Factory、`workspace.picker.directoryFlow` 第三个 directory-flow 洞、`sidebar.session.action` hoc 槽、2 个 upload 图标、`RemoteErrorDetailsMap` 加一行 `deepseekChatImport/owner-only`）。插件五个注册槽均不涉及新增键；**21 个消费包逐字节相同**（`dsh-session` 44 文件、`dsh-session-query` 30、`dsh-shell` 12、`dsh-sandbox-policy` 18、`dsh-pwsh-sandbox` 18、`dsh-settings` 26、`dsh-client-ui-slots` 12、`dsh-client-ui-chat` 245、`dsh-client-ui-conversation` 196、`dsh-workspace` 29、`dsh-api-workspace-controller` 49 等）。包集合 **336 → 337**。
+> **关键不变量复核**：`Session.append` 批量重载与 `session/event` 逐事件派发在 rc.2 即已存在、本版未变；`buildForkSeed` 切点整文件未变；`fork` 标题仍只在 `increaseTitle` 分支 rename（插件不传）；`archiveSession(id, { stopActivity: true })` 签名与语义未变。
+> **新包的行为观察（非缺陷）**：`dsh-deepseek-chat-import` 导入的会话由 `Session.create` + `SessionHandle.append` 直接落盘、**不经 live Session 故不触发 `session/event`**——插件不会补拍其历史消息（与「只对实时用户消息拍快照」的既有语义一致）；用户在该会话继续对话时事件形状与普通会话相同，插件照常工作。
+> **门禁（rc.3 实装）**：`typecheck`、单测 **627**、client **143**、`test:probe` **63/63**、`verify:host` 全过；`check:dsh` 修复前仅镜像/契约两处版本字段漂移，回填后六条 peer 全满足（cordis 4.1.0 / schemastery 3.19.0 在范围内）。镜像 13 源重拉 **13/13 逐字节相同**。核验记录归口 [upgrade-assessments/dsh-0.2.2-rc.3.md](./upgrade-assessments/dsh-0.2.2-rc.3.md)。
 > **0.2.2-rc.2 核验（2026-11-12）——零破坏版本（已实装）：改版面很宽（21 位贡献者），但插件消费面逐字节未变；四条演进进入邻域、逐条排除**：
 > **版本链路**：`0.2.2-rc.1`(11-04) → `rc.2`(11-11)，单版增量（中间无其他版本）。release notes 56 条（3 新增 / 27 优化 / 26 修复 / 20 其他含 Breaking 与迁移）。
 > **核验方式**：release notes 逐条筛查 + **两棵实装树逐文件 SHA256**（旧实装目录改名作基线、新装对比；包集合 **329 → 336**；排除 `*.map` 后 **182 包 `lib`/`dist` 漂移**）+ 消费点 `.d.ts`/实现逐行 diff + 门禁实跑 + 镜像十三次重拉。

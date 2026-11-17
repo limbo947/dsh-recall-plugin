@@ -11,6 +11,7 @@
  */
 
 import os from 'node:os'
+import fs from 'node:fs'
 import crypto from 'node:crypto'
 import { spawn as childSpawn } from 'node:child_process'
 import * as pwshScripts from './scripts.pwsh.js'
@@ -1028,5 +1029,85 @@ export function createRuntime(ctx: HostContext, config: ResolvedConfig, deps?: {
     // 清理失败不重试、不告警：残留只占磁盘无功能影响（理由见上方 legacyCleaned 注释）
   }
 
-  return { state, isWin, scripts, recordError, runShell, runShellMeta, writeTextViaShell, resolveRoot, resolveGit, homeDirFor, resolveHomeContainer, resolveStore, storeFromDir, tryUpgradeToHome, ensureGit, cleanupLegacy, cleanupAfterGitFailure }
+  // 预热剪枝（issue #24 遗留项）：哪些工作区在磁盘上已经有快照库目录。
+  // 从来没有 store 的工作区（误开过、一条消息都没发过的空会话）预热没有任何
+  // 东西可加载，却要付 resolveStore + ensureGit（git init）+ rebuildOrphans 的
+  // 整条进程链——报告者实测一个 1.9GB 的下载目录每次启动都被摸一遍，重启后
+  // CPU 再次打满。判据只问「目录在不在」，不问内容：在就照常预热（索引/孤儿/
+  // 崩溃恢复都还要跑），不在才跳过。跳过是安全的——第一条消息的快照路径自己会
+  // 建库，loadIndex 与 intent journal 的 recover 也都挂在那条链上，不会漏掉任何
+  // 状态迁移；init 端点同样与预热共享 ensureRootReady，不受影响。
+  //
+  // 全程 Node fs（零 shell 进程）：这是纯只读的存在性判断，为它再起 pwsh
+  // （本机实测单次 spawn ≈ 234ms）就把要省的开销原样还回去了。候选容器在 Node
+  // 侧按三档回退同式枚举，与 shell 侧口径对齐：子进程 env 被剥掉全部 DSH_*（见
+  // buildSpawnEnv 注释），所以 shell 侧只读得到「进程 env 的 DSH_HOME」一档，
+  // 其余两档都是主目录（`~/.dsh` 与 I24 迁移前的旧位 `~/`）。
+  // 探到非 ENOENT 错误（权限/IO）说明「探不清」——抛给调用侧 fail-open，宁可多
+  // 预热一轮，也不能凭猜把有存量快照的工作区剪掉。
+  function homeContainerCandidates(): string[] {
+    const bases: string[] = []
+    const envHome = (process.env && process.env.DSH_HOME) || ''
+    if (envHome) bases.push(envHome)
+    const home = os.homedir()
+    bases.push(home + SEP + '.dsh')
+    // I24：POSIX 第三档的旧容器（迁移失败/双容器并存时 store 仍住在 ~ 下）
+    if (!isWin) bases.push(home)
+    const out: string[] = []
+    for (const base of bases) {
+      const candidate = base.replace(/[\\/]+$/, '') + SEP + 'dsh-recall-snapshots'
+      if (out.indexOf(candidate) < 0) out.push(candidate)
+    }
+    return out
+  }
+
+  async function rootsWithExistingStore(roots: string[]): Promise<Set<string>> {
+    const all = new Set(roots)
+    if (roots.length === 0) return all
+    // 配了显式快照根时不剪枝：换根的存量搬迁（adoptHomeStore）挂在 resolveStore
+    // 里，而启动预热是它唯一的启动期触发点——剪掉「新根还没有库」的工作区就等于
+    // 把搬迁推迟到用户下次发消息，快照管理会先显示一个空库（issue #36 的换根路径）。
+    if (configuredStoreBase()) return all
+    // 归一化必须与 resolveRoot 的尾部处理逐字一致：store 目录名是归一后路径的
+    // SHA256，预热拿到的是会话 header 里的原始 cwd（可能带尾斜杠），不归一会算出
+    // 另一个哈希、把「其实有库」的工作区误判成没有。
+    const normalize = (p: string) => {
+      let v = String(p).replace(/[\\/]+$/, '') || (isWin ? p : '/')
+      if (isWin && v.length === 2) v += '\\'
+      return v
+    }
+    const exists = (p: string): boolean => {
+      // 单条 stat 失败（ENOENT/权限/悬空链接）按「不存在」处理：判据的代价是不对称
+      // 的——误判成不存在会少预热一个工作区（它的存量快照不进内存），所以上面容器
+      // 档的探测把非 ENOENT 错误显式抛出去 fail-open，而这里逐 root 的细粒度 stat
+      // 只在容器已确认可读之后跑，失败基本只剩「目录确实不在」这一种解释。
+      try { return fs.statSync(p).isDirectory() } catch (error) { return false }
+    }
+    // 先挑出真实存在的容器：不存在 = 该档不可能有 store，不必逐 root 试探
+    const containers: string[] = []
+    try {
+      for (const candidate of homeContainerCandidates()) {
+        try {
+          if (fs.statSync(candidate).isDirectory()) containers.push(candidate)
+        } catch (error) {
+          if (!error || (error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
+        }
+      }
+    } catch (error) {
+      console.error('recall warmup prune skipped (container probe failed):', String(error))
+      return all
+    }
+    const found = new Set<string>()
+    for (const root of roots) {
+      const normalized = normalize(root)
+      // 哈希在 Node 侧算（hashRootPath）：与 win32 模板的 shell 侧哈希同字节
+      const hash = hashRootPath(normalized)
+      if (containers.some((container) => exists(container + SEP + hash))) found.add(root)
+      // 降级存储（项目内 .dsh-recall-snapshots）同样算「有库」
+      else if (exists(normalized + SEP + '.dsh-recall-snapshots')) found.add(root)
+    }
+    return found
+  }
+
+  return { state, isWin, scripts, recordError, runShell, runShellMeta, writeTextViaShell, resolveRoot, resolveGit, homeDirFor, resolveHomeContainer, resolveStore, storeFromDir, tryUpgradeToHome, ensureGit, cleanupLegacy, cleanupAfterGitFailure, rootsWithExistingStore }
 }
