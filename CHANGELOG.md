@@ -2,6 +2,19 @@
 
 本文件格式遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循语义化版本。
 
+## [2.6.8] - 2026-11-17
+
+### 修复
+
+- **新工作区首条消息报「快照失败：fatal: cannot copy ... File exists」，该条消息没有快照（issue #37）**：同一个空影子仓库上并发跑了两条 `git init`——`init` 端点 / 启动预热走 `ensureRootReady`（不在工作区队列内），首条消息快照走 `enqueueFor` 队列后**直接**调 `rt.ensureGit`，两条链不共享任何锁；`ensureGit` 只有「成功后」的 `gitReady` 缓存，没有 in-flight 去重，于是两个 init 都判定需要建库。git 的 `copy_templates` 先 `lstat` 判「目标不存在」再以 `O_EXCL` 建，输家拿到 `EEXIST` 即 `die_errno` 报此文案。现在 `ensureGit` 按 `store.git` 做 in-flight 去重（共享同一次 init 的 promise，失败自清不缓存错误结果），三条入口自动收敛到同一个 `git init`。POSIX 模板原有的「`HEAD` 已出现即视同成功」兜底拦不住这个竞态——输家死在赢家写 `HEAD` **之前**（`copy_templates` 早于 `create_reference_database`），本机 Windows 实测输家 exit 128、赢家 exit 0 证实。
+
+### 测试
+
+- 新增 `tests/unit/ensure-git-inflight.test.js`（5 例）：同一 `store.git` 并发 2/3 次只触发一次 shell 且两个调用拿到同一结果、成功后 `gitReady` 命中零 shell、**失败不缓存**（in-flight 清理后下次真的重试）、不同 `store.git` 不互相去重。用 deferred promise 制造并发窗口而非 sleep，CI 慢机上同样稳定。
+- **负面对照**：把 `ensureGit` 临时退回无去重形态后，本组 2 条并发用例立即失败（3 次并发实测跑了 3 次 init），还原后全绿——不是形式化断言。
+- **竞态在 Windows 上稳定复现**（报告者测的是 macOS）：用 `Start-Process` 让两个 `git init` 真正同时启动，8/8 轮全部命中 `cannot copy ... File exists`，错误文案与 issue 报告逐字一致；单轮验证输家 exit 128、赢家 exit 0、`HEAD` 由赢家创建。
+- 门禁：`typecheck`、单测 **632**（50 文件）、client **143**、`verify:host` 全过，`build` 产物已更新。
+
 ## [2.6.7] - 2026-11-17
 
 ### 兼容性

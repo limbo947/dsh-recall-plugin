@@ -981,8 +981,27 @@ export function createRuntime(ctx: HostContext, config: ResolvedConfig, deps?: {
   // 分类成 snapFeedback 的可行动提示（此前吞成布尔，客户端空轮询 20 次、
   // 用户零感知，issue #11 主线缺口）。store 是本次实际生效的 store（issue #36
   // 降级后与入参不同），调用方必须改用它继续后续命令。
-  async function ensureGit(root: string, store: StoreInfo, retried = false): Promise<EnsureGitResult> {
-    if (state.gitReady.has(store.git)) return { ok: true, store }
+  // 并发去重（issue #37）：gitReady 只记「已成功」，两个调用者同时撞在**空**
+  // 仓库上时都会判定需要 init。三条入口互不排队——init 端点/启动预热走
+  // ensureRootReady（不在工作区队列内），首条消息的快照走 enqueueFor 队列后
+  // **直接**调本函数。两条 git init 并发时，git 的 copy_templates 先 lstat 判
+  // 「目标不存在」再以 O_EXCL 建，输家拿到 EEXIST →
+  // `fatal: cannot copy ... File exists`。posix 模板「HEAD 已出现即视同成功」的
+  // 兜底拦不住：本竞态里输家死在赢家写 HEAD **之前**（copy_templates 早于
+  // create_reference_database）。以 store.git 为键共享 in-flight promise，
+  // 失败自清、不缓存错误结果（瞬态失败下一次仍要能重试）。
+  const ensureGitInflight = new Map<string, Promise<EnsureGitResult>>()
+  function ensureGit(root: string, store: StoreInfo, retried = false): Promise<EnsureGitResult> {
+    if (state.gitReady.has(store.git)) return Promise.resolve({ ok: true, store })
+    const running = ensureGitInflight.get(store.git)
+    if (running) return running
+    const task = ensureGitOnce(root, store, retried)
+      .finally(() => { ensureGitInflight.delete(store.git) })
+    ensureGitInflight.set(store.git, task)
+    return task
+  }
+
+  async function ensureGitOnce(root: string, store: StoreInfo, retried = false): Promise<EnsureGitResult> {
     const gitExe = await resolveGit()
     if (!gitExe) {
       // git 缺失分支：原先静默 return false，连 recordError 都没有（用户
@@ -1002,6 +1021,8 @@ export function createRuntime(ctx: HostContext, config: ResolvedConfig, deps?: {
       recordError('recall ensureGit failed: ' + String(error))
       // issue #36：探测通过但写盘被拒（沙箱 token 只拒 CREATE_CHILD 就是这种
       // 形态），降级到项目内 store 再试一次；retried 保证只降一级、不递归。
+      // 降级后的 store.git 与入参不同，走 ensureGit 取它自己的 in-flight
+      // （retried=true 让它不再降级，避免递归）。
       if (!retried) {
         const next = await downgradeStore(root, store, String(error))
         if (next) return await ensureGit(root, next, true)
